@@ -1,0 +1,156 @@
+package parser
+
+import "toe/lexer"
+
+type (
+	unaryParser  func() Expr
+	binaryParser func(Expr) Expr
+)
+
+type Parser struct {
+	filename      string
+	tokens        []lexer.Token
+	Errors        []ParserError
+	curr          int // how many we have consumed.
+	unaryParsers  map[lexer.TokenType]unaryParser
+	binaryParsers map[lexer.TokenType]binaryParser
+	precedences   map[lexer.TokenType]int
+}
+
+const (
+	PREC_LOWEST  = iota
+	PREC_EQ      // ==, !=
+	PREC_SUM     // +, -
+	PREC_PRODUCT // *, /
+	PREC_UNARY   // !, -
+	PREC_CALL    // (), .
+)
+
+// ====
+// init
+// ====
+
+func New(fn string, tokens []lexer.Token) *Parser {
+	p := &Parser{
+		filename: fn,
+		tokens:   tokens,
+		Errors:   []ParserError{},
+		curr:     0,
+	}
+	p.unaryParsers = map[lexer.TokenType]unaryParser{
+		lexer.LEFT_PAREN: p.grouping,
+		lexer.IDENTIFIER: p.literal,
+		lexer.NUMBER:     p.literal,
+		lexer.STRING:     p.literal,
+		lexer.TRUE:       p.literal,
+		lexer.FALSE:      p.literal,
+		lexer.NIL:        p.literal,
+		lexer.BANG:       p.unary,
+	}
+	// note: need to make sure that every entry in binaryParsers
+	// has a corresponding entry in precedences.
+	p.binaryParsers = map[lexer.TokenType]binaryParser{
+		lexer.EQUAL_EQUAL: p.binary,
+		lexer.BANG_EQUAL:  p.binary,
+		lexer.PLUS:        p.binary,
+		lexer.MINUS:       p.binary,
+		lexer.STAR:        p.binary,
+		lexer.SLASH:       p.binary,
+	}
+	p.precedences = map[lexer.TokenType]int{
+		lexer.EQUAL_EQUAL: PREC_EQ,
+		lexer.BANG_EQUAL:  PREC_EQ,
+		lexer.PLUS:        PREC_SUM,
+		lexer.MINUS:       PREC_SUM,
+		lexer.STAR:        PREC_PRODUCT,
+		lexer.SLASH:       PREC_PRODUCT,
+	}
+	return p
+}
+
+// =====
+// utils
+// =====
+
+// consume consumes one token
+func (p *Parser) consume() lexer.Token {
+	if !p.isAtEnd() {
+		p.curr++
+	}
+	return p.previous()
+}
+
+// previous returns the most recently consumed token
+func (p *Parser) previous() lexer.Token { return p.tokens[p.curr-1] }
+
+// peek returns the token to be consumed
+func (p *Parser) peek() lexer.Token { return p.tokens[p.curr] }
+
+// isAtEnd returns true if the current token is an EOF token
+func (p *Parser) isAtEnd() bool { return p.peek().Type == lexer.EOF }
+
+// check returns if the peek token matches the given type
+func (p *Parser) check(t lexer.TokenType) bool {
+	return !p.isAtEnd() && p.peek().Type == t
+}
+
+// match consumes the token if it matches any of the given types
+func (p *Parser) match(types ...lexer.TokenType) bool {
+	for _, t := range types {
+		if p.check(t) {
+			p.consume()
+			return true
+		}
+	}
+	return false
+}
+
+// ==================
+// expression parsing
+// ==================
+
+func (p *Parser) ParseExpression() Expr { return p.expression() }
+
+// expression matches a single expression.
+func (p *Parser) expression() Expr { return p.precedence(PREC_LOWEST) }
+func (p *Parser) precedence(prec int) Expr {
+	unary, ok := p.unaryParsers[p.peek().Type]
+	if !ok {
+		p.error("expected an expression, got %s", p.peek().Type)
+		return nil
+	}
+	expr := unary()
+	for !p.check(lexer.SEMICOLON) && prec < p.peekPrecedence() {
+		expr = p.binaryParsers[p.peek().Type](expr)
+	}
+	return expr
+}
+
+func (p *Parser) peekPrecedence() int {
+	if prec, ok := p.precedences[p.peek().Type]; ok {
+		return prec
+	}
+	return PREC_LOWEST
+}
+
+func (p *Parser) unary() Expr {
+	tok := p.consume()
+	return newUnary(tok, p.precedence(PREC_UNARY-1))
+}
+
+func (p *Parser) grouping() Expr {
+	p.consume()
+	expr := p.expression()
+	p.expect(lexer.RIGHT_PAREN, "unmatched (")
+	return expr
+}
+
+func (p *Parser) binary(left Expr) Expr {
+	tok := p.consume()
+	return newBinary(tok, left, p.precedence(p.precedences[tok.Type]))
+}
+
+func (p *Parser) literal() Expr {
+	tok := p.consume()
+	return newLiteral(tok)
+}

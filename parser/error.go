@@ -19,10 +19,10 @@ func (pe ParserError) String() string {
 	return fmt.Sprintf("%s:%d:%d: %s", pe.Filename, pe.Token.Line, pe.Token.Column, pe.Message)
 }
 
-func (p *Parser) error(s string, args ...interface{}) error {
+func (p *Parser) error(tok lexer.Token, s string, args ...interface{}) error {
 	err := ParserError{
 		Filename: p.filename,
-		Token:    p.previous(),
+		Token:    tok,
 		Message:  fmt.Sprintf(s, args...),
 	}
 	p.Errors = append(p.Errors, err)
@@ -31,7 +31,7 @@ func (p *Parser) error(s string, args ...interface{}) error {
 
 func (p *Parser) expect(typ lexer.TokenType, s string, args ...interface{}) lexer.Token {
 	if !p.match(typ) {
-		panic(p.error(s, args...))
+		panic(p.error(p.peek(), s, args...))
 	}
 	return p.previous()
 }

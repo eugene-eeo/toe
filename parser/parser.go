@@ -261,7 +261,7 @@ func (p *Parser) continueStmt(inLoop bool) Stmt {
 		// in order to: 1, give a correct token position, and
 		// 2, not crash (in case this is the _first_ token we
 		// see).
-		p.error("unexpected continue outside of a loop")
+		p.error(p.previous(), "unexpected continue outside of a loop")
 	}
 	p.expect(lexer.SEMICOLON, "expected ; after continue")
 	return newContinue(token)
@@ -270,7 +270,7 @@ func (p *Parser) continueStmt(inLoop bool) Stmt {
 func (p *Parser) breakStmt(inLoop bool) Stmt {
 	token := p.consume()
 	if !inLoop {
-		p.error("unexpected break outside of a loop")
+		p.error(p.previous(), "unexpected break outside of a loop")
 	}
 	p.expect(lexer.SEMICOLON, "expected ; after break")
 	return newBreak(token)
@@ -291,7 +291,7 @@ func (p *Parser) expression() Expr { return p.precedence(PREC_LOWEST) }
 func (p *Parser) precedence(prec int) Expr {
 	unary, ok := p.unaryParsers[p.peek().Type]
 	if !ok {
-		panic(p.error("not an expression: %s", p.peek().Type))
+		panic(p.error(p.peek(), "not an expression: %s", p.previous().Type))
 	}
 	expr := unary()
 	for !p.check(lexer.SEMICOLON) && prec < p.peekPrecedence() {
@@ -327,7 +327,7 @@ func (p *Parser) assign(left Expr) Expr {
 	default:
 		// this is not an error worth panicking over.
 		// just move along -- we will put it in `.errors'.
-		p.error("invalid assignment target")
+		p.error(left.Tok(), "invalid assignment target")
 		return newAssign(tok, left, p.precedence(PREC_ASSIGN-1))
 	}
 }

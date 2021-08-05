@@ -34,7 +34,7 @@ type {name} struct {{
 """
 
 meth_template = "func (node *{name}) {func_name}() {type} {{ {body} }}"
-func_template = "func new{name}({args}) *{name} {{ return &{name}{{ {props} }} }}"
+func_template = "func new{name}({args}) *{name} {{ return &{name}{{ {props} }} }}"  # noqa: E501
 
 FUNCS = []
 TYPES = []
@@ -81,7 +81,7 @@ def stmt(*args, **kwargs):
 
 def generate():
     input = package_template.format(
-        functions="\n".join(FUNCS),
+        functions="\n\n".join(FUNCS),
         types="\n".join(TYPES),
         structs="\n".join(STRUCTS),
     )
@@ -106,13 +106,13 @@ def generate():
 # ======================
 
 if __name__ == '__main__':
-    # flake8: noqa
     # autopep8: off
     # Statements
-    stmt('MODULE', 'Module', fields=['Filename string', 'Statements []Stmt'])
     stmt('LET', 'Let', fields=['Name Expr', 'Value Expr'])
     stmt('BLOCK', 'Block', fields=['Statements []Stmt'])
     stmt('FOR', 'For', fields=['Name Expr', 'Iter Expr', 'Stmt Stmt'])
+    stmt('WHILE', 'While', fields=['Cond Expr', 'Stmt Stmt'])
+    stmt('IF', 'If', fields=['Cond Expr', 'Then Stmt', 'Else Stmt'])
     stmt('EXPR_STMT', 'ExprStmt', fields=['Expr Expr'])
     # Expressions
     expr('BINARY', 'Binary', fields=['Left Expr', 'Right Expr'])

@@ -27,7 +27,6 @@ func (p *Parser) error(s string, args ...interface{}) error {
 	}
 	p.Errors = append(p.Errors, err)
 	return err
-	// panic(err)
 }
 
 func (p *Parser) expect(typ lexer.TokenType, s string, args ...interface{}) lexer.Token {

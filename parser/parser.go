@@ -21,6 +21,7 @@ const (
 	PREC_LOWEST  = iota
 	PREC_ASSIGN  // =
 	PREC_EQ      // ==, !=
+	PREC_CMP     // <=, <, >, >=
 	PREC_AND     // and, or
 	PREC_SUM     // +, -
 	PREC_PRODUCT // *, /
@@ -48,30 +49,39 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.FALSE:      p.literal,
 		lexer.NIL:        p.literal,
 		lexer.BANG:       p.unary,
+		lexer.MINUS:      p.unary,
 	}
 	// note: need to make sure that every entry in binaryParsers
 	// has a corresponding entry in precedences.
 	p.binaryParsers = map[lexer.TokenType]binaryParser{
-		lexer.EQUAL:       p.assign,
-		lexer.AND:         p.and,
-		lexer.OR:          p.or,
-		lexer.EQUAL_EQUAL: p.binary,
-		lexer.BANG_EQUAL:  p.binary,
-		lexer.PLUS:        p.binary,
-		lexer.MINUS:       p.binary,
-		lexer.STAR:        p.binary,
-		lexer.SLASH:       p.binary,
+		lexer.EQUAL:         p.assign,
+		lexer.AND:           p.and,
+		lexer.OR:            p.or,
+		lexer.EQUAL_EQUAL:   p.binary,
+		lexer.BANG_EQUAL:    p.binary,
+		lexer.GREATER:       p.binary,
+		lexer.GREATER_EQUAL: p.binary,
+		lexer.LESS:          p.binary,
+		lexer.LESS_EQUAL:    p.binary,
+		lexer.PLUS:          p.binary,
+		lexer.MINUS:         p.binary,
+		lexer.STAR:          p.binary,
+		lexer.SLASH:         p.binary,
 	}
 	p.precedences = map[lexer.TokenType]int{
-		lexer.EQUAL:       PREC_ASSIGN,
-		lexer.AND:         PREC_AND,
-		lexer.OR:          PREC_AND,
-		lexer.EQUAL_EQUAL: PREC_EQ,
-		lexer.BANG_EQUAL:  PREC_EQ,
-		lexer.PLUS:        PREC_SUM,
-		lexer.MINUS:       PREC_SUM,
-		lexer.STAR:        PREC_PRODUCT,
-		lexer.SLASH:       PREC_PRODUCT,
+		lexer.EQUAL:         PREC_ASSIGN,
+		lexer.AND:           PREC_AND,
+		lexer.OR:            PREC_AND,
+		lexer.EQUAL_EQUAL:   PREC_EQ,
+		lexer.BANG_EQUAL:    PREC_EQ,
+		lexer.GREATER:       PREC_CMP,
+		lexer.GREATER_EQUAL: PREC_CMP,
+		lexer.LESS:          PREC_CMP,
+		lexer.LESS_EQUAL:    PREC_CMP,
+		lexer.PLUS:          PREC_SUM,
+		lexer.MINUS:         PREC_SUM,
+		lexer.STAR:          PREC_PRODUCT,
+		lexer.SLASH:         PREC_PRODUCT,
 	}
 	return p
 }
@@ -111,6 +121,20 @@ func (p *Parser) match(types ...lexer.TokenType) bool {
 		}
 	}
 	return false
+}
+
+// ===========
+// entry point
+// ===========
+
+// module → declaration*
+
+func (p *Parser) Parse() *Module {
+	module := &Module{Filename: p.filename, Stmts: []Stmt{}}
+	for !p.isAtEnd() {
+		module.Stmts = append(module.Stmts, p.declaration())
+	}
+	return module
 }
 
 // =================
@@ -158,10 +182,14 @@ func (p *Parser) declaration() (stmt Stmt) {
 
 func (p *Parser) statement() Stmt {
 	switch {
-	case p.match(lexer.LEFT_BRACE):
-		return p.blockStmt()
-	case p.match(lexer.FOR):
+	case p.check(lexer.FOR):
 		return p.forStmt()
+	case p.check(lexer.WHILE):
+		return p.whileStmt()
+	case p.check(lexer.IF):
+		return p.ifStmt()
+	case p.check(lexer.LEFT_BRACE):
+		return p.blockStmt()
 	}
 	return p.exprStmt()
 }
@@ -186,6 +214,28 @@ func (p *Parser) forStmt() Stmt {
 	return newFor(token, newIdentifier(ident), iter, stmt)
 }
 
+func (p *Parser) whileStmt() Stmt {
+	token := p.consume()
+	p.expect(lexer.LEFT_PAREN, "expected (")
+	cond := p.expression()
+	p.expect(lexer.RIGHT_PAREN, "unclosed (")
+	stmt := p.statement()
+	return newWhile(token, cond, stmt)
+}
+
+func (p *Parser) ifStmt() Stmt {
+	token := p.consume()
+	p.expect(lexer.LEFT_PAREN, "expected (")
+	cond := p.expression()
+	p.expect(lexer.RIGHT_PAREN, "unclosed (")
+	then := p.statement()
+	var elseStmt Stmt = nil
+	if p.match(lexer.ELSE) {
+		elseStmt = p.statement()
+	}
+	return newIf(token, cond, then, elseStmt)
+}
+
 func (p *Parser) blockStmt() Stmt {
 	token := p.consume()
 	stmts := []Stmt{}
@@ -206,14 +256,12 @@ func (p *Parser) exprStmt() Stmt {
 // expression parsing
 // ==================
 
-func (p *Parser) ParseExpression() Expr { return p.expression() }
-
 // expression matches a single expression.
 func (p *Parser) expression() Expr { return p.precedence(PREC_LOWEST) }
 func (p *Parser) precedence(prec int) Expr {
 	unary, ok := p.unaryParsers[p.peek().Type]
 	if !ok {
-		panic(p.error("expected an expression, got %s", p.peek().Type))
+		panic(p.error("not an expression: %s", p.peek().Type))
 	}
 	expr := unary()
 	for !p.check(lexer.SEMICOLON) && prec < p.peekPrecedence() {
@@ -250,7 +298,7 @@ func (p *Parser) assign(left Expr) Expr {
 		// this is not an error worth panicking over.
 		// just move along -- we will put it in `.errors'.
 		p.error("invalid assignment target")
-		return nil
+		return newAssign(tok, left, p.precedence(PREC_ASSIGN-1))
 	}
 }
 

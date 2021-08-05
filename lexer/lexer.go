@@ -211,7 +211,7 @@ func (l *Lexer) scanToken() {
 	case '{':
 		l.emit(LEFT_BRACE)
 	case '}':
-		l.emit(RIGHT_PAREN)
+		l.emit(RIGHT_BRACE)
 	case ',':
 		l.emit(COMMA)
 	case '.':

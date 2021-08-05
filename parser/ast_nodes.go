@@ -5,10 +5,11 @@ import "toe/lexer"
 
 const (
 	_ = NodeType(iota)
-	MODULE
 	LET
 	BLOCK
 	FOR
+	WHILE
+	IF
 	EXPR_STMT
 	BINARY
 	AND
@@ -18,16 +19,6 @@ const (
 	IDENTIFIER
 	LITERAL
 )
-
-type Module struct {
-	Token      lexer.Token
-	Filename   string
-	Statements []Stmt
-}
-
-func (node *Module) Tok() lexer.Token { return node.Token }
-func (node *Module) Type() NodeType   { return MODULE }
-func (node *Module) stmt()            {}
 
 type Let struct {
 	Token lexer.Token
@@ -58,6 +49,27 @@ type For struct {
 func (node *For) Tok() lexer.Token { return node.Token }
 func (node *For) Type() NodeType   { return FOR }
 func (node *For) stmt()            {}
+
+type While struct {
+	Token lexer.Token
+	Cond  Expr
+	Stmt  Stmt
+}
+
+func (node *While) Tok() lexer.Token { return node.Token }
+func (node *While) Type() NodeType   { return WHILE }
+func (node *While) stmt()            {}
+
+type If struct {
+	Token lexer.Token
+	Cond  Expr
+	Then  Stmt
+	Else  Stmt
+}
+
+func (node *If) Tok() lexer.Token { return node.Token }
+func (node *If) Type() NodeType   { return IF }
+func (node *If) stmt()            {}
 
 type ExprStmt struct {
 	Token lexer.Token
@@ -133,31 +145,46 @@ func (node *Literal) Tok() lexer.Token { return node.Token }
 func (node *Literal) Type() NodeType   { return LITERAL }
 func (node *Literal) expr()            {}
 
-func newModule(Token lexer.Token, Filename string, Statements []Stmt) *Module {
-	return &Module{Token: Token, Filename: Filename, Statements: Statements}
-}
 func newLet(Token lexer.Token, Name Expr, Value Expr) *Let {
 	return &Let{Token: Token, Name: Name, Value: Value}
 }
+
 func newBlock(Token lexer.Token, Statements []Stmt) *Block {
 	return &Block{Token: Token, Statements: Statements}
 }
+
 func newFor(Token lexer.Token, Name Expr, Iter Expr, Stmt Stmt) *For {
 	return &For{Token: Token, Name: Name, Iter: Iter, Stmt: Stmt}
 }
+
+func newWhile(Token lexer.Token, Cond Expr, Stmt Stmt) *While {
+	return &While{Token: Token, Cond: Cond, Stmt: Stmt}
+}
+
+func newIf(Token lexer.Token, Cond Expr, Then Stmt, Else Stmt) *If {
+	return &If{Token: Token, Cond: Cond, Then: Then, Else: Else}
+}
+
 func newExprStmt(Token lexer.Token, Expr Expr) *ExprStmt { return &ExprStmt{Token: Token, Expr: Expr} }
+
 func newBinary(Token lexer.Token, Left Expr, Right Expr) *Binary {
 	return &Binary{Token: Token, Left: Left, Right: Right}
 }
+
 func newAnd(Token lexer.Token, Left Expr, Right Expr) *And {
 	return &And{Token: Token, Left: Left, Right: Right}
 }
+
 func newOr(Token lexer.Token, Left Expr, Right Expr) *Or {
 	return &Or{Token: Token, Left: Left, Right: Right}
 }
+
 func newAssign(Token lexer.Token, Left Expr, Right Expr) *Assign {
 	return &Assign{Token: Token, Left: Left, Right: Right}
 }
+
 func newUnary(Token lexer.Token, Right Expr) *Unary { return &Unary{Token: Token, Right: Right} }
-func newIdentifier(Token lexer.Token) *Identifier   { return &Identifier{Token: Token} }
-func newLiteral(Token lexer.Token) *Literal         { return &Literal{Token: Token} }
+
+func newIdentifier(Token lexer.Token) *Identifier { return &Identifier{Token: Token} }
+
+func newLiteral(Token lexer.Token) *Literal { return &Literal{Token: Token} }

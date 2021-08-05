@@ -7,7 +7,7 @@ import (
 )
 
 func TestParser(t *testing.T) {
-	l := lexer.New("", "(a + 1.5) * true")
+	l := lexer.New("", "abcdef = 2")
 	l.ScanTokens()
 	if len(l.Errors) != 0 {
 		t.Error("got errors")
@@ -18,4 +18,11 @@ func TestParser(t *testing.T) {
 	}
 	p := parser.New("", l.Tokens)
 	t.Logf("%+v\n", p.ParseExpression())
+	if len(p.Errors) != 0 {
+		t.Error("got errors")
+		for _, err := range p.Errors {
+			t.Error(err.String())
+		}
+		return
+	}
 }

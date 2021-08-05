@@ -9,5 +9,12 @@ type Node interface {
 	Type() NodeType
 }
 
-type Expr interface { expr() }
-type Stmt interface { stmt() }
+type Expr interface {
+	Node
+	expr()
+}
+
+type Stmt interface {
+	Node
+	stmt()
+}

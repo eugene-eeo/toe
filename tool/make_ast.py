@@ -110,10 +110,15 @@ if __name__ == '__main__':
     # autopep8: off
     # Statements
     stmt('MODULE', 'Module', fields=['Filename string', 'Statements []Stmt'])
+    stmt('LET', 'Let', fields=['Name Expr', 'Value Expr'])
+    stmt('EXPR_STMT', 'ExprStmt', fields=['Expr Expr'])
     # Expressions
     expr('BINARY', 'Binary', fields=['Left Expr', 'Right Expr'])
+    expr('AND', 'And', fields=['Left Expr', 'Right Expr'])
+    expr('OR', 'Or', fields=['Left Expr', 'Right Expr'])
     expr('ASSIGN', 'Assign', fields=['Left Expr', 'Right Expr'])
     expr('UNARY', 'Unary',  fields=['Right Expr'])
+    expr('IDENTIFIER', 'Identifier', fields=[])
     expr('LITERAL', 'Literal', fields=[])
     # autopep8: on
     generate()

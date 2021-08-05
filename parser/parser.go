@@ -19,7 +19,9 @@ type Parser struct {
 
 const (
 	PREC_LOWEST  = iota
+	PREC_ASSIGN  // =
 	PREC_EQ      // ==, !=
+	PREC_AND     // and, or
 	PREC_SUM     // +, -
 	PREC_PRODUCT // *, /
 	PREC_UNARY   // !, -
@@ -39,7 +41,7 @@ func New(fn string, tokens []lexer.Token) *Parser {
 	}
 	p.unaryParsers = map[lexer.TokenType]unaryParser{
 		lexer.LEFT_PAREN: p.grouping,
-		lexer.IDENTIFIER: p.literal,
+		lexer.IDENTIFIER: p.identifier,
 		lexer.NUMBER:     p.literal,
 		lexer.STRING:     p.literal,
 		lexer.TRUE:       p.literal,
@@ -50,6 +52,9 @@ func New(fn string, tokens []lexer.Token) *Parser {
 	// note: need to make sure that every entry in binaryParsers
 	// has a corresponding entry in precedences.
 	p.binaryParsers = map[lexer.TokenType]binaryParser{
+		lexer.EQUAL:       p.assign,
+		lexer.AND:         p.and,
+		lexer.OR:          p.or,
 		lexer.EQUAL_EQUAL: p.binary,
 		lexer.BANG_EQUAL:  p.binary,
 		lexer.PLUS:        p.binary,
@@ -58,6 +63,9 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.SLASH:       p.binary,
 	}
 	p.precedences = map[lexer.TokenType]int{
+		lexer.EQUAL:       PREC_ASSIGN,
+		lexer.AND:         PREC_AND,
+		lexer.OR:          PREC_AND,
 		lexer.EQUAL_EQUAL: PREC_EQ,
 		lexer.BANG_EQUAL:  PREC_EQ,
 		lexer.PLUS:        PREC_SUM,
@@ -105,6 +113,69 @@ func (p *Parser) match(types ...lexer.TokenType) bool {
 	return false
 }
 
+// =================
+// statement parsing
+// =================
+//
+// to differentiate between a declaration and a statement, we
+// use the following rules; this is to disallow e.g.:
+//   if (expr) let x = 1; <-- what's the point?
+//
+// the main entry point is the declaration rule:
+//
+//   declaration → let | statement
+//   statement   → for | while | if | block | exprStmt
+//   let      → "let" IDENT "=" expression ";"
+//   for      → "for" "(" IDENT "in" expr ")" statement
+//   while    → "while" "(" expr ")" statement
+//   if       → "if" "(" expr ")" statement ( "else" statement )?
+//   block    → "{" declaration* "}"
+//   exprStmt → expression ";"
+//
+// note: since most of the let,for,... are keywords in Go,
+// they are named __Stmt().
+
+func (p *Parser) declaration() (stmt Stmt) {
+	defer func() {
+		if rv := recover(); rv != nil {
+			if _, ok := rv.(ParserError); ok {
+				p.synchronize()
+				stmt = nil
+				return
+			}
+			panic(rv)
+		}
+	}()
+	if p.check(lexer.LET) {
+		stmt = p.letStmt()
+	} else {
+		stmt = p.statement()
+	}
+	return
+}
+
+func (p *Parser) statement() Stmt {
+	// switch {
+	// case p.match(lexer.FOR):
+	// }
+	return p.exprStmt()
+}
+
+func (p *Parser) letStmt() Stmt {
+	token := p.consume()
+	ident := p.expect(lexer.IDENTIFIER, "expected an identifier")
+	p.expect(lexer.EQUAL, "expected =")
+	expr := p.expression()
+	p.expect(lexer.SEMICOLON, "expected ; after variable declaration")
+	return newLet(token, newLiteral(ident), expr)
+}
+
+func (p *Parser) exprStmt() Stmt {
+	expr := p.expression()
+	p.expect(lexer.SEMICOLON, "expected ; after expression statement")
+	return newExprStmt(expr.Tok(), expr)
+}
+
 // ==================
 // expression parsing
 // ==================
@@ -116,8 +187,7 @@ func (p *Parser) expression() Expr { return p.precedence(PREC_LOWEST) }
 func (p *Parser) precedence(prec int) Expr {
 	unary, ok := p.unaryParsers[p.peek().Type]
 	if !ok {
-		p.error("expected an expression, got %s", p.peek().Type)
-		return nil
+		panic(p.error("expected an expression, got %s", p.peek().Type))
 	}
 	expr := unary()
 	for !p.check(lexer.SEMICOLON) && prec < p.peekPrecedence() {
@@ -145,9 +215,37 @@ func (p *Parser) grouping() Expr {
 	return expr
 }
 
+func (p *Parser) assign(left Expr) Expr {
+	tok := p.consume()
+	switch left.Type() {
+	case IDENTIFIER:
+		return newAssign(tok, left, p.precedence(PREC_ASSIGN-1))
+	default:
+		// this is not an error worth panicking over.
+		// just move along -- we will put it in `.errors'.
+		p.error("invalid assignment target")
+		return nil
+	}
+}
+
 func (p *Parser) binary(left Expr) Expr {
 	tok := p.consume()
 	return newBinary(tok, left, p.precedence(p.precedences[tok.Type]))
+}
+
+func (p *Parser) and(left Expr) Expr {
+	tok := p.consume()
+	return newAnd(tok, left, p.precedence(PREC_AND))
+}
+
+func (p *Parser) or(left Expr) Expr {
+	tok := p.consume()
+	return newOr(tok, left, p.precedence(PREC_AND))
+}
+
+func (p *Parser) identifier() Expr {
+	tok := p.consume()
+	return newIdentifier(tok)
 }
 
 func (p *Parser) literal() Expr {

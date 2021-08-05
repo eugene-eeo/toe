@@ -34,12 +34,12 @@ const (
 	GREATER_EQUAL
 	LESS
 	LESS_EQUAL
-	COLON_EQUAL
 	// literals
 	IDENTIFIER
 	STRING
 	NUMBER
 	// keywords
+	LET
 	AND
 	OR
 	ELSE
@@ -58,6 +58,9 @@ const (
 )
 
 var keywords = map[string]TokenType{
+	"let":    LET,
+	"and":    AND,
+	"or":     OR,
 	"else":   ELSE,
 	"false":  FALSE,
 	"fn":     FN,
@@ -248,24 +251,6 @@ func (l *Lexer) scanToken() {
 			l.emit(GREATER_EQUAL)
 		} else {
 			l.emit(GREATER)
-		}
-	case '|':
-		if l.match('|') {
-			l.emit(OR)
-		} else {
-			l.error("invalid operator")
-		}
-	case '&':
-		if l.match('&') {
-			l.emit(AND)
-		} else {
-			l.error("invalid operator")
-		}
-	case ':':
-		if l.match('=') {
-			l.emit(COLON_EQUAL)
-		} else {
-			l.error("invalid operator")
 		}
 	case '"':
 		l.lexString()

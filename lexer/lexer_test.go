@@ -7,8 +7,8 @@ import (
 
 func TestLexer(t *testing.T) {
 	lex := lexer.New("", `
-Animal := Object.clone(nil);
-dog := PetDog.new("阿福");
+let Animal = Object.clone(nil);
+let dog = PetDog.new("阿福");
 21.50 == 2.10;
 true == false == fn() { return 2 }`)
 	lex.ScanTokens()

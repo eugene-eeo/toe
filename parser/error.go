@@ -14,20 +14,27 @@ type ParserError struct {
 	Message  string
 }
 
-func (p *Parser) error(s string, args ...interface{}) {
+func (pe ParserError) Error() string { return pe.String() }
+func (pe ParserError) String() string {
+	return fmt.Sprintf("%s:%d:%d: %s", pe.Filename, pe.Token.Line, pe.Token.Column, pe.Message)
+}
+
+func (p *Parser) error(s string, args ...interface{}) error {
 	err := ParserError{
 		Filename: p.filename,
 		Token:    p.previous(),
 		Message:  fmt.Sprintf(s, args...),
 	}
 	p.Errors = append(p.Errors, err)
-	panic(err)
+	return err
+	// panic(err)
 }
 
-func (p *Parser) expect(typ lexer.TokenType, s string, args ...interface{}) {
+func (p *Parser) expect(typ lexer.TokenType, s string, args ...interface{}) lexer.Token {
 	if !p.match(typ) {
-		p.error(s, args...)
+		panic(p.error(s, args...))
 	}
+	return p.previous()
 }
 
 // synchronize synchronizes the parser by discarding tokens
@@ -41,6 +48,7 @@ func (p *Parser) synchronize() {
 			return
 		}
 		switch p.peek().Type {
+		case lexer.LET:
 		case lexer.IF:
 		case lexer.RETURN:
 		case lexer.FOR:

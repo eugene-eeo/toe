@@ -126,7 +126,7 @@ func (p *Parser) match(types ...lexer.TokenType) bool {
 //   declaration → let | statement
 //   statement   → for | while | if | block | exprStmt
 //   let      → "let" IDENT "=" expression ";"
-//   for      → "for" "(" IDENT "in" expr ")" statement
+//   for      → "for" "(" IDENT ":" expr ")" statement
 //   while    → "while" "(" expr ")" statement
 //   if       → "if" "(" expr ")" statement ( "else" statement )?
 //   block    → "{" declaration* "}"
@@ -137,6 +137,8 @@ func (p *Parser) match(types ...lexer.TokenType) bool {
 
 func (p *Parser) declaration() (stmt Stmt) {
 	defer func() {
+		// this will be called repeatedly as we parse statements,
+		// so this is a good place to synchronize().
 		if rv := recover(); rv != nil {
 			if _, ok := rv.(ParserError); ok {
 				p.synchronize()
@@ -155,9 +157,12 @@ func (p *Parser) declaration() (stmt Stmt) {
 }
 
 func (p *Parser) statement() Stmt {
-	// switch {
-	// case p.match(lexer.FOR):
-	// }
+	switch {
+	case p.match(lexer.LEFT_BRACE):
+		return p.blockStmt()
+	case p.match(lexer.FOR):
+		return p.forStmt()
+	}
 	return p.exprStmt()
 }
 
@@ -167,7 +172,28 @@ func (p *Parser) letStmt() Stmt {
 	p.expect(lexer.EQUAL, "expected =")
 	expr := p.expression()
 	p.expect(lexer.SEMICOLON, "expected ; after variable declaration")
-	return newLet(token, newLiteral(ident), expr)
+	return newLet(token, newIdentifier(ident), expr)
+}
+
+func (p *Parser) forStmt() Stmt {
+	token := p.consume() // the 'for' token
+	p.expect(lexer.LEFT_PAREN, "expected (")
+	ident := p.expect(lexer.IDENTIFIER, "expected an identifier")
+	p.expect(lexer.COLON, "expected :")
+	iter := p.expression()
+	p.expect(lexer.RIGHT_PAREN, "unclosed (")
+	stmt := p.statement()
+	return newFor(token, newIdentifier(ident), iter, stmt)
+}
+
+func (p *Parser) blockStmt() Stmt {
+	token := p.consume()
+	stmts := []Stmt{}
+	for !p.isAtEnd() && !p.check(lexer.RIGHT_BRACE) {
+		stmts = append(stmts, p.declaration())
+	}
+	p.expect(lexer.RIGHT_BRACE, "unmatched {")
+	return newBlock(token, stmts)
 }
 
 func (p *Parser) exprStmt() Stmt {

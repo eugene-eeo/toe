@@ -7,6 +7,8 @@ const (
 	_ = NodeType(iota)
 	MODULE
 	LET
+	BLOCK
+	FOR
 	EXPR_STMT
 	BINARY
 	AND
@@ -36,6 +38,26 @@ type Let struct {
 func (node *Let) Tok() lexer.Token { return node.Token }
 func (node *Let) Type() NodeType   { return LET }
 func (node *Let) stmt()            {}
+
+type Block struct {
+	Token      lexer.Token
+	Statements []Stmt
+}
+
+func (node *Block) Tok() lexer.Token { return node.Token }
+func (node *Block) Type() NodeType   { return BLOCK }
+func (node *Block) stmt()            {}
+
+type For struct {
+	Token lexer.Token
+	Name  Expr
+	Iter  Expr
+	Stmt  Stmt
+}
+
+func (node *For) Tok() lexer.Token { return node.Token }
+func (node *For) Type() NodeType   { return FOR }
+func (node *For) stmt()            {}
 
 type ExprStmt struct {
 	Token lexer.Token
@@ -116,6 +138,12 @@ func newModule(Token lexer.Token, Filename string, Statements []Stmt) *Module {
 }
 func newLet(Token lexer.Token, Name Expr, Value Expr) *Let {
 	return &Let{Token: Token, Name: Name, Value: Value}
+}
+func newBlock(Token lexer.Token, Statements []Stmt) *Block {
+	return &Block{Token: Token, Statements: Statements}
+}
+func newFor(Token lexer.Token, Name Expr, Iter Expr, Stmt Stmt) *For {
+	return &For{Token: Token, Name: Name, Iter: Iter, Stmt: Stmt}
 }
 func newExprStmt(Token lexer.Token, Expr Expr) *ExprStmt { return &ExprStmt{Token: Token, Expr: Expr} }
 func newBinary(Token lexer.Token, Left Expr, Right Expr) *Binary {

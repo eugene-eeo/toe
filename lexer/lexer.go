@@ -19,6 +19,7 @@ const (
 	LEFT_BRACE
 	RIGHT_BRACE
 	COMMA
+	COLON
 	DOT
 	MINUS
 	PLUS
@@ -199,6 +200,8 @@ func (l *Lexer) scanToken() {
 			l.advance()
 		}
 		l.ignore()
+	case ':':
+		l.emit(COLON)
 	case ';':
 		l.emit(SEMICOLON)
 	case '(':

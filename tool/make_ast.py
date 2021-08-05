@@ -111,6 +111,8 @@ if __name__ == '__main__':
     # Statements
     stmt('MODULE', 'Module', fields=['Filename string', 'Statements []Stmt'])
     stmt('LET', 'Let', fields=['Name Expr', 'Value Expr'])
+    stmt('BLOCK', 'Block', fields=['Statements []Stmt'])
+    stmt('FOR', 'For', fields=['Name Expr', 'Iter Expr', 'Stmt Stmt'])
     stmt('EXPR_STMT', 'ExprStmt', fields=['Expr Expr'])
     # Expressions
     expr('BINARY', 'Binary', fields=['Left Expr', 'Right Expr'])

@@ -54,25 +54,29 @@ const (
 	THIS
 	TRUE
 	WHILE
+	BREAK
+	CONTINUE
 	// meta
 	EOF
 )
 
 var keywords = map[string]TokenType{
-	"let":    LET,
-	"and":    AND,
-	"or":     OR,
-	"else":   ELSE,
-	"false":  FALSE,
-	"fn":     FN,
-	"for":    FOR,
-	"if":     IF,
-	"nil":    NIL,
-	"return": RETURN,
-	"super":  SUPER,
-	"this":   THIS,
-	"true":   TRUE,
-	"while":  WHILE,
+	"let":      LET,
+	"and":      AND,
+	"or":       OR,
+	"else":     ELSE,
+	"false":    FALSE,
+	"fn":       FN,
+	"for":      FOR,
+	"if":       IF,
+	"nil":      NIL,
+	"return":   RETURN,
+	"super":    SUPER,
+	"this":     THIS,
+	"true":     TRUE,
+	"while":    WHILE,
+	"break":    BREAK,
+	"continue": CONTINUE,
 }
 
 type Token struct {
@@ -195,7 +199,7 @@ func (l *Lexer) scanToken() {
 	}
 	switch ch {
 	// Ignore whitespace
-	case ' ', '\t' , '\r', '\n':
+	case ' ', '\t', '\r', '\n':
 		for isWhiteSpace(l.peek()) {
 			l.advance()
 		}

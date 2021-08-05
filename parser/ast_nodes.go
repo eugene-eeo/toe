@@ -11,11 +11,14 @@ const (
 	WHILE
 	IF
 	EXPR_STMT
+	BREAK
+	CONTINUE
 	BINARY
 	AND
 	OR
 	ASSIGN
 	UNARY
+	GET
 	IDENTIFIER
 	LITERAL
 )
@@ -80,6 +83,22 @@ func (node *ExprStmt) Tok() lexer.Token { return node.Token }
 func (node *ExprStmt) Type() NodeType   { return EXPR_STMT }
 func (node *ExprStmt) stmt()            {}
 
+type Break struct {
+	Token lexer.Token
+}
+
+func (node *Break) Tok() lexer.Token { return node.Token }
+func (node *Break) Type() NodeType   { return BREAK }
+func (node *Break) stmt()            {}
+
+type Continue struct {
+	Token lexer.Token
+}
+
+func (node *Continue) Tok() lexer.Token { return node.Token }
+func (node *Continue) Type() NodeType   { return CONTINUE }
+func (node *Continue) stmt()            {}
+
 type Binary struct {
 	Token lexer.Token
 	Left  Expr
@@ -129,6 +148,16 @@ func (node *Unary) Tok() lexer.Token { return node.Token }
 func (node *Unary) Type() NodeType   { return UNARY }
 func (node *Unary) expr()            {}
 
+type Get struct {
+	Token lexer.Token
+	Left  Expr
+	Right lexer.Token
+}
+
+func (node *Get) Tok() lexer.Token { return node.Token }
+func (node *Get) Type() NodeType   { return GET }
+func (node *Get) expr()            {}
+
 type Identifier struct {
 	Token lexer.Token
 }
@@ -167,6 +196,10 @@ func newIf(Token lexer.Token, Cond Expr, Then Stmt, Else Stmt) *If {
 
 func newExprStmt(Token lexer.Token, Expr Expr) *ExprStmt { return &ExprStmt{Token: Token, Expr: Expr} }
 
+func newBreak(Token lexer.Token) *Break { return &Break{Token: Token} }
+
+func newContinue(Token lexer.Token) *Continue { return &Continue{Token: Token} }
+
 func newBinary(Token lexer.Token, Left Expr, Right Expr) *Binary {
 	return &Binary{Token: Token, Left: Left, Right: Right}
 }
@@ -184,6 +217,10 @@ func newAssign(Token lexer.Token, Left Expr, Right Expr) *Assign {
 }
 
 func newUnary(Token lexer.Token, Right Expr) *Unary { return &Unary{Token: Token, Right: Right} }
+
+func newGet(Token lexer.Token, Left Expr, Right lexer.Token) *Get {
+	return &Get{Token: Token, Left: Left, Right: Right}
+}
 
 func newIdentifier(Token lexer.Token) *Identifier { return &Identifier{Token: Token} }
 

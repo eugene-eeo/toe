@@ -132,7 +132,7 @@ func (p *Parser) match(types ...lexer.TokenType) bool {
 func (p *Parser) Parse() *Module {
 	module := &Module{Filename: p.filename, Stmts: []Stmt{}}
 	for !p.isAtEnd() {
-		module.Stmts = append(module.Stmts, p.declaration())
+		module.Stmts = append(module.Stmts, p.declaration(false))
 	}
 	return module
 }
@@ -159,10 +159,12 @@ func (p *Parser) Parse() *Module {
 // note: since most of the let,for,... are keywords in Go,
 // they are named __Stmt().
 
-func (p *Parser) declaration() (stmt Stmt) {
+func (p *Parser) declaration(inLoop bool) (stmt Stmt) {
 	defer func() {
-		// this will be called repeatedly as we parse statements,
-		// so this is a good place to synchronize().
+		// This will be called repeatedly as we parse statements, so
+		// this is a good place to synchronize(). We have to make
+		// sure that all top-level calls to parse statements/expressions
+		// have a recover.
 		if rv := recover(); rv != nil {
 			if _, ok := rv.(ParserError); ok {
 				p.synchronize()
@@ -175,21 +177,35 @@ func (p *Parser) declaration() (stmt Stmt) {
 	if p.check(lexer.LET) {
 		stmt = p.letStmt()
 	} else {
-		stmt = p.statement()
+		stmt = p.statement(inLoop)
 	}
 	return
 }
 
-func (p *Parser) statement() Stmt {
+func (p *Parser) statement(inLoop bool) Stmt {
 	switch {
 	case p.check(lexer.FOR):
 		return p.forStmt()
 	case p.check(lexer.WHILE):
 		return p.whileStmt()
 	case p.check(lexer.IF):
-		return p.ifStmt()
+		return p.ifStmt(inLoop)
 	case p.check(lexer.LEFT_BRACE):
-		return p.blockStmt()
+		return p.blockStmt(inLoop)
+	case p.check(lexer.CONTINUE):
+		rv := newContinue(p.consume())
+		if !inLoop {
+			p.error("unexpected continue outside of a loop")
+		}
+		p.expect(lexer.SEMICOLON, "expected ; after continue")
+		return rv
+	case p.check(lexer.BREAK):
+		rv := newBreak(p.consume())
+		if !inLoop {
+			p.error("unexpected break outside of a loop")
+		}
+		p.expect(lexer.SEMICOLON, "expected ; after break")
+		return rv
 	}
 	return p.exprStmt()
 }
@@ -210,7 +226,7 @@ func (p *Parser) forStmt() Stmt {
 	p.expect(lexer.COLON, "expected :")
 	iter := p.expression()
 	p.expect(lexer.RIGHT_PAREN, "unclosed (")
-	stmt := p.statement()
+	stmt := p.statement(true)
 	return newFor(token, newIdentifier(ident), iter, stmt)
 }
 
@@ -219,28 +235,28 @@ func (p *Parser) whileStmt() Stmt {
 	p.expect(lexer.LEFT_PAREN, "expected (")
 	cond := p.expression()
 	p.expect(lexer.RIGHT_PAREN, "unclosed (")
-	stmt := p.statement()
+	stmt := p.statement(true)
 	return newWhile(token, cond, stmt)
 }
 
-func (p *Parser) ifStmt() Stmt {
+func (p *Parser) ifStmt(inLoop bool) Stmt {
 	token := p.consume()
 	p.expect(lexer.LEFT_PAREN, "expected (")
 	cond := p.expression()
 	p.expect(lexer.RIGHT_PAREN, "unclosed (")
-	then := p.statement()
+	then := p.statement(inLoop)
 	var elseStmt Stmt = nil
 	if p.match(lexer.ELSE) {
-		elseStmt = p.statement()
+		elseStmt = p.statement(inLoop)
 	}
 	return newIf(token, cond, then, elseStmt)
 }
 
-func (p *Parser) blockStmt() Stmt {
+func (p *Parser) blockStmt(inLoop bool) Stmt {
 	token := p.consume()
 	stmts := []Stmt{}
 	for !p.isAtEnd() && !p.check(lexer.RIGHT_BRACE) {
-		stmts = append(stmts, p.declaration())
+		stmts = append(stmts, p.declaration(inLoop))
 	}
 	p.expect(lexer.RIGHT_BRACE, "unmatched {")
 	return newBlock(token, stmts)

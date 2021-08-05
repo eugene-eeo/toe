@@ -15,6 +15,8 @@ func (node *Module) String() string {
 	return strings.Join(stmts, "\n")
 }
 
+// Statements
+
 func (node *Let) String() string {
 	var buf bytes.Buffer
 	buf.WriteString(node.Tok().Lexeme)
@@ -78,6 +80,11 @@ func (node *ExprStmt) String() string {
 	buf.WriteString(";")
 	return buf.String()
 }
+
+func (node *Break) String() string    { return node.Tok().Lexeme + ";" }
+func (node *Continue) String() string { return node.Tok().Lexeme + ";" }
+
+// Expressions
 
 func (node *Assign) String() string {
 	var buf bytes.Buffer

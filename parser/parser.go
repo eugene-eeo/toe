@@ -148,12 +148,14 @@ func (p *Parser) Parse() *Module {
 // the main entry point is the declaration rule:
 //
 //   declaration → let | statement
-//   statement   → for | while | if | block | exprStmt
+//   statement   → for | while | if | block | break | continue | exprStmt
 //   let      → "let" IDENT "=" expression ";"
 //   for      → "for" "(" IDENT ":" expr ")" statement
 //   while    → "while" "(" expr ")" statement
 //   if       → "if" "(" expr ")" statement ( "else" statement )?
 //   block    → "{" declaration* "}"
+//   break    → "break" ";"
+//   continue → "continue" ";"
 //   exprStmt → expression ";"
 //
 // note: since most of the let,for,... are keywords in Go,
@@ -193,19 +195,9 @@ func (p *Parser) statement(inLoop bool) Stmt {
 	case p.check(lexer.LEFT_BRACE):
 		return p.blockStmt(inLoop)
 	case p.check(lexer.CONTINUE):
-		rv := newContinue(p.consume())
-		if !inLoop {
-			p.error("unexpected continue outside of a loop")
-		}
-		p.expect(lexer.SEMICOLON, "expected ; after continue")
-		return rv
+		return p.continueStmt(inLoop)
 	case p.check(lexer.BREAK):
-		rv := newBreak(p.consume())
-		if !inLoop {
-			p.error("unexpected break outside of a loop")
-		}
-		p.expect(lexer.SEMICOLON, "expected ; after break")
-		return rv
+		return p.breakStmt(inLoop)
 	}
 	return p.exprStmt()
 }
@@ -260,6 +252,28 @@ func (p *Parser) blockStmt(inLoop bool) Stmt {
 	}
 	p.expect(lexer.RIGHT_BRACE, "unmatched {")
 	return newBlock(token, stmts)
+}
+
+func (p *Parser) continueStmt(inLoop bool) Stmt {
+	token := p.consume()
+	if !inLoop {
+		// it's necessary to error _after_ consuming the token,
+		// in order to: 1, give a correct token position, and
+		// 2, not crash (in case this is the _first_ token we
+		// see).
+		p.error("unexpected continue outside of a loop")
+	}
+	p.expect(lexer.SEMICOLON, "expected ; after continue")
+	return newContinue(token)
+}
+
+func (p *Parser) breakStmt(inLoop bool) Stmt {
+	token := p.consume()
+	if !inLoop {
+		p.error("unexpected break outside of a loop")
+	}
+	p.expect(lexer.SEMICOLON, "expected ; after break")
+	return newBreak(token)
 }
 
 func (p *Parser) exprStmt() Stmt {

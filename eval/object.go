@@ -16,84 +16,65 @@ const (
 	BOOLEAN
 	NUMBER
 	OBJECT
-	META
+	BUILTIN
+	FUNCTION
+	// Meta values
+	ERROR
 )
 
 type Value interface {
-	Prototype() Value
 	Type() ValueType
-}
-
-// basic is an embeddable struct to give each `real' object
-// the common properties.
-type basic struct {
-	proto Value
-	typ   ValueType
-}
-
-func (b basic) Prototype() Value { return b.proto }
-func (b basic) Type() ValueType  { return b.typ }
-
-func makeBasic(proto Value, typ ValueType) basic {
-	return basic{proto, typ}
 }
 
 // -----------------
 // Boxed value types
 // -----------------
 
-type Nil struct{ basic }
-
-func newNil(object Value) *Nil {
-	return &Nil{makeBasic(object, NIL)}
-}
-
-type Boolean struct {
-	basic
-	value bool
-}
-
-func newBoolean(object Value, value bool) *Boolean {
-	return &Boolean{makeBasic(object, BOOLEAN), value}
-}
-
-type Number struct {
-	basic
-	value float64
-}
-
-func newNumber(object Value, value float64) *Number {
-	return &Number{makeBasic(object, NUMBER), value}
-}
-
-type String struct {
-	basic
-	value string
-}
-
-func newString(object Value, value string) *String {
-	return &String{makeBasic(object, STRING), value}
-}
+type Nil struct{}
+type Boolean struct{ value bool }
+type Number struct{ value float64 }
+type String struct{ value string }
 
 type Object struct {
-	basic
 	props map[string]Value
+	proto Value
 }
+
+func (v *Nil) Type() ValueType     { return NIL }
+func (v *Boolean) Type() ValueType { return BOOLEAN }
+func (v *Number) Type() ValueType  { return NUMBER }
+func (v *String) Type() ValueType  { return STRING }
+func (v *Object) Type() ValueType  { return OBJECT }
 
 func newObject(object Value) *Object {
 	return &Object{
-		basic: makeBasic(object, OBJECT),
+		proto: object,
 		props: map[string]Value{},
 	}
+}
+
+type Builtin struct {
+	this Value // x.fn() --> this == x
+	fn   func(ctx *Context, this Value, args []Value) Value
+}
+
+func (v *Builtin) Type() ValueType { return BUILTIN }
+
+func (v *Builtin) Bind(this Value) *Builtin {
+	if v.this == nil {
+		return &Builtin{this, v.fn}
+	}
+	return v
+}
+
+func (v *Builtin) Call(ctx *Context, args []Value) Value {
+	return v.fn(ctx, v.this, args)
 }
 
 // ----------------------
 // Runtime Control Values
 // ----------------------
 
-type Error struct {
-	reason Value
-}
+type Error struct{ reason Value }
 
-func (e *Error) Prototype() Value { return nil }
-func (e *Error) Type() ValueType { return META }
+func (e *Error) Type() ValueType { return ERROR }

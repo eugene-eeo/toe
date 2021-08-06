@@ -11,14 +11,15 @@ import (
 type Context struct {
 	env *Environment // current executing environment.
 	// 'global' values
-	_Object  Value // Object
-	_nil     Value // nil
-	_Boolean Value // Boolean
-	_true    Value // true
-	_false   Value // false
-	_Number  Value // Number
-	_String  Value // String
-	_module  Value // module
+	_Object   *Object  // Object
+	_Nil      *Object  // Nil (prototype of nil)
+	_nil      *Nil     // nil
+	_Boolean  *Object  // Boolean
+	_Function *Object  // Function
+	_true     *Boolean // true
+	_false    *Boolean // false
+	_Number   *Object  // Number
+	_String   *Object  // String
 }
 
 func NewContext() *Context {
@@ -26,10 +27,12 @@ func NewContext() *Context {
 	ctx.env = newEnvironment(nil)
 	// bootstrap the object system
 	ctx._Object = newObject(nil)
-	ctx._nil = newNil(ctx._Object)
+	ctx._Nil = newObject(ctx._Object) // even nil is an Object
+	ctx._nil = &Nil{}
 	ctx._Boolean = newObject(ctx._Object)
-	ctx._true = newBoolean(ctx._Boolean, true)
-	ctx._false = newBoolean(ctx._Boolean, false)
+	ctx._Function = newObject(ctx._Object)
+	ctx._true = &Boolean{true}
+	ctx._false = &Boolean{false}
 	ctx._Number = newObject(ctx._Object)
 	ctx._String = newObject(ctx._Object)
 	// todo: add any methods here.
@@ -49,7 +52,7 @@ func (ctx *Context) EvalModule(module *parser.Module) Value {
 	mod_obj := newObject(ctx._Object)
 	ctx.pushEnv()
 	ctx.env.Define("module", mod_obj)
-	mod_obj.props["__file__"] = newString(ctx._String, module.Filename)
+	mod_obj.props["__file__"] = &String{module.Filename}
 	for _, stmt := range module.Stmts {
 		ctx.Eval(stmt)
 	}
@@ -78,7 +81,7 @@ func (ctx *Context) Eval(node parser.Node) Value {
 		ident := node.Tok().Lexeme
 		rv, ok := ctx.env.Get(ident)
 		if !ok {
-			return &Error{ctx.newString(fmt.Sprintf("unknown identifier %s", ident))}
+			return &Error{&String{fmt.Sprintf("unknown identifier %s", ident)}}
 		}
 		return rv
 	case *parser.Assign:
@@ -91,7 +94,7 @@ func (ctx *Context) Eval(node parser.Node) Value {
 			}
 			env := ctx.env.Resolve(name)
 			if env == nil {
-				return &Error{ctx.newString(fmt.Sprintf("unknown identifier %s", name))}
+				return &Error{&String{fmt.Sprintf("unknown identifier %s", name)}}
 			}
 			env.Define(name, value)
 			return value
@@ -110,9 +113,9 @@ func (ctx *Context) Eval(node parser.Node) Value {
 	case *parser.Literal:
 		switch node.Tok().Type {
 		case lexer.NUMBER:
-			return newNumber(ctx._Number, node.Token.Literal.(float64))
+			return &Number{node.Token.Literal.(float64)}
 		case lexer.STRING:
-			return newString(ctx._String, node.Token.Literal.(string))
+			return &String{node.Token.Literal.(string)}
 		case lexer.NIL:
 			return ctx._nil
 		case lexer.TRUE:
@@ -121,32 +124,7 @@ func (ctx *Context) Eval(node parser.Node) Value {
 			return ctx._false
 		}
 	}
-	panic(fmt.Sprintf("not implemented yet: %#+v", node))
-}
-
-// Operators
-
-func (ctx *Context) evalBinary(op lexer.TokenType, left Value, right Value) Value {
-	switch op {
-	case lexer.EQUAL_EQUAL:
-		switch {
-		case left == right: // fast pointer equality
-			return ctx._true
-		case left.Type() != right.Type():
-			return ctx._false
-		case left.Type() == NUMBER && right.Type() == NUMBER:
-			return ctx.newBool(
-				left.(*Number).value == right.(*Number).value,
-			)
-		case left.Type() == STRING && right.Type() == STRING:
-			return ctx.newBool(
-				left.(*String).value == right.(*String).value,
-			)
-		default:
-			return ctx._false
-		}
-	}
-	panic(fmt.Sprintf("not implemented yet: %#+v", op))
+	return &Error{&String{fmt.Sprintf("not implemented yet: %#+v", node)}}
 }
 
 // =====
@@ -159,10 +137,6 @@ func (ctx *Context) newBool(b bool) Value {
 	} else {
 		return ctx._false
 	}
-}
-
-func (ctx *Context) newString(lit string) Value {
-	return newString(ctx._String, lit)
 }
 
 func isError(v Value) bool {

@@ -16,10 +16,13 @@ const (
 	BOOLEAN
 	NUMBER
 	OBJECT
+	ARRAY
 	BUILTIN
 	FUNCTION
 	// Meta values
 	ERROR
+	BREAK
+	CONTINUE
 )
 
 type Value interface {
@@ -53,6 +56,10 @@ func newObject(object Value) *Object {
 	}
 }
 
+type Array struct{ arr []Value }
+
+func (v *Array) Type() ValueType { return ARRAY }
+
 type Builtin struct {
 	this Value // x.fn() --> this == x
 	fn   func(ctx *Context, this Value, args []Value) Value
@@ -75,6 +82,13 @@ func (v *Builtin) Call(ctx *Context, args []Value) Value {
 // Runtime Control Values
 // ----------------------
 
+// Error is a currently propagating error (exception).
 type Error struct{ reason Value }
 
+// Break signals that a loop is being broken from.
+type Break struct{}
+type Continue struct{}
+
 func (e *Error) Type() ValueType { return ERROR }
+func (b *Break) Type() ValueType { return BREAK }
+func (c *Continue) Type() ValueType { return CONTINUE }

@@ -14,6 +14,8 @@ import (
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	ctx := eval.NewContext()
+	env, _ := ctx.NewModuleEnv("<stdin>")
+	ctx.Env = env
 	for {
 		fmt.Printf("> ")
 		if !scanner.Scan() {
@@ -37,15 +39,14 @@ func main() {
 			}
 			continue
 		}
-		var rv eval.Value = nil
 		for _, stmt := range module.Stmts {
-			rv = ctx.Eval(stmt)
-		}
-		if rv != nil {
-			// if rv.(*parser.Error) {
-			// 	fmt.Printf("%#v\n", rv)
-			// }
-			fmt.Printf("%#v\n", rv)
+			rv := ctx.Eval(stmt)
+			if rv != nil {
+				// if rv.(*parser.Error) {
+				// 	fmt.Printf("%#v\n", rv)
+				// }
+				fmt.Printf("%#v\n", rv)
+			}
 		}
 	}
 }

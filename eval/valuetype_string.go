@@ -13,14 +13,17 @@ func _() {
 	_ = x[BOOLEAN-3]
 	_ = x[NUMBER-4]
 	_ = x[OBJECT-5]
-	_ = x[BUILTIN-6]
-	_ = x[FUNCTION-7]
-	_ = x[ERROR-8]
+	_ = x[ARRAY-6]
+	_ = x[BUILTIN-7]
+	_ = x[FUNCTION-8]
+	_ = x[ERROR-9]
+	_ = x[BREAK-10]
+	_ = x[CONTINUE-11]
 }
 
-const _ValueType_name = "NILSTRINGBOOLEANNUMBEROBJECTBUILTINFUNCTIONERROR"
+const _ValueType_name = "NILSTRINGBOOLEANNUMBEROBJECTARRAYBUILTINFUNCTIONERRORBREAKCONTINUE"
 
-var _ValueType_index = [...]uint8{0, 3, 9, 16, 22, 28, 35, 43, 48}
+var _ValueType_index = [...]uint8{0, 3, 9, 16, 22, 28, 33, 40, 48, 53, 58, 66}
 
 func (i ValueType) String() string {
 	i -= 1

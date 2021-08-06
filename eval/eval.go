@@ -9,7 +9,8 @@ import (
 )
 
 type Context struct {
-	env *Environment // current executing environment.
+	Env     *Environment // current executing environment.
+	Globals *Environment // globals environment.
 	// 'global' values
 	_Object   *Object  // Object
 	_Nil      *Object  // Nil (prototype of nil)
@@ -20,11 +21,12 @@ type Context struct {
 	_false    *Boolean // false
 	_Number   *Object  // Number
 	_String   *Object  // String
+	_Array    *Object
 }
 
 func NewContext() *Context {
 	ctx := &Context{}
-	ctx.env = newEnvironment(nil)
+	ctx.Globals = newEnvironment(nil)
 	// bootstrap the object system
 	ctx._Object = newObject(nil)
 	ctx._Nil = newObject(ctx._Object) // even nil is an Object
@@ -35,28 +37,43 @@ func NewContext() *Context {
 	ctx._false = &Boolean{false}
 	ctx._Number = newObject(ctx._Object)
 	ctx._String = newObject(ctx._Object)
-	// todo: add any methods here.
+	ctx._Array = newObject(ctx._Object)
+	// todo: add methods here.
 	// define globals
-	ctx.env.Define("Object", ctx._Object)
-	ctx.env.Define("Boolean", ctx._Boolean)
-	ctx.env.Define("Number", ctx._Number)
-	ctx.env.Define("String", ctx._String)
+	ctx.Globals.Define("Object", ctx._Object)
+	ctx.Globals.Define("Boolean", ctx._Boolean)
+	ctx.Globals.Define("Number", ctx._Number)
+	ctx.Globals.Define("String", ctx._String)
+	ctx.Globals.Define("Array", ctx._Array)
 	return ctx
 }
 
-func (ctx *Context) pushEnv() { ctx.env = newEnvironment(ctx.env) }
-func (ctx *Context) popEnv()  { ctx.env = ctx.env.outer }
+func (ctx *Context) popEnv() { ctx.Env = ctx.Env.outer }
+func (ctx *Context) pushEnv() *Environment {
+	ctx.Env = newEnvironment(ctx.Env)
+	return ctx.Env
+}
+
+func (ctx *Context) NewModuleEnv(filename string) (*Environment, Value) {
+	new_env := newEnvironment(ctx.Globals)
+	mod_obj := newObject(ctx._Object)
+	mod_obj.props["filename"] = &String{filename}
+	mod_obj.props["exports"] = newObject(ctx._Object)
+	new_env.Define("module", mod_obj)
+	return new_env, mod_obj
+}
 
 func (ctx *Context) EvalModule(module *parser.Module) Value {
-	// First push a new environment with a module object.
-	mod_obj := newObject(ctx._Object)
-	ctx.pushEnv()
-	ctx.env.Define("module", mod_obj)
-	mod_obj.props["__file__"] = &String{module.Filename}
+	new_env, mod_obj := ctx.NewModuleEnv(module.Filename)
+	og_env := ctx.Env
+	ctx.Env = new_env
 	for _, stmt := range module.Stmts {
-		ctx.Eval(stmt)
+		v := ctx.Eval(stmt)
+		if isError(v) {
+			return v
+		}
 	}
-	ctx.popEnv()
+	ctx.Env = og_env
 	return mod_obj
 }
 
@@ -73,13 +90,21 @@ func (ctx *Context) Eval(node parser.Node) Value {
 			if isError(value) {
 				return value
 			}
-			ctx.env.Define(name, value)
+			ctx.Env.Define(name, value)
 			return ctx._nil
 		}
+	case *parser.For:
+		return ctx.evalFor(node)
+	case *parser.Block:
+		return ctx.evalBlock(node)
+	case *parser.Break:
+		return &Break{}
+	case *parser.Continue:
+		return &Continue{}
 	// Expressions
 	case *parser.Identifier:
 		ident := node.Tok().Lexeme
-		rv, ok := ctx.env.Get(ident)
+		rv, ok := ctx.Env.Get(ident)
 		if !ok {
 			return &Error{&String{fmt.Sprintf("unknown identifier %s", ident)}}
 		}
@@ -92,7 +117,7 @@ func (ctx *Context) Eval(node parser.Node) Value {
 			if isError(value) {
 				return value
 			}
-			env := ctx.env.Resolve(name)
+			env := ctx.Env.Resolve(name)
 			if env == nil {
 				return &Error{&String{fmt.Sprintf("unknown identifier %s", name)}}
 			}
@@ -127,6 +152,71 @@ func (ctx *Context) Eval(node parser.Node) Value {
 	return &Error{&String{fmt.Sprintf("not implemented yet: %#+v", node)}}
 }
 
+// ===================
+// Iterator evaluation
+// ===================
+
+func (ctx *Context) evalFor(node *parser.For) Value {
+	// In theory we would need a stack for iterators,
+	// but the call stack helps us handle it.
+	it := ctx.Eval(node.Iter)
+	if isError(it) {
+		return it
+	}
+	iter, ok := ctx.getIterator(it)
+	if !ok {
+		// havent found an iterator?
+		return &Error{&String{fmt.Sprintf("not iterable")}}
+	}
+	// the default return value is nil. if we meet an error,
+	// then we would set rv = that error.
+	var rv Value = ctx._nil
+	ctx.pushEnv()
+	defer ctx.popEnv()
+	// now keep evaluating the stmt.
+	for {
+		done := iter.Done()
+		if isError(done) {
+			rv = done
+			break
+		}
+		if ctx.isTruthy(done) {
+			break
+		}
+		next := iter.Next()
+		if isError(next) {
+			rv = next
+			break
+		}
+		ctx.Env.Define(node.Name.Tok().Lexeme, next)
+		round := ctx.Eval(node.Stmt)
+		switch {
+		case isError(round):
+			rv = round
+			break
+		case isBreak(round):
+			break
+		}
+	}
+	if v := iter.End(); isError(v) {
+		return v
+	}
+	return rv
+}
+
+func (ctx *Context) evalBlock(node *parser.Block) Value {
+	var rv Value = ctx._nil
+	ctx.pushEnv()
+	defer ctx.popEnv()
+	for _, stmt := range node.Statements {
+		rv = ctx.Eval(stmt)
+		if isError(rv) || isBreak(rv) || isContinue(rv) {
+			return rv
+		}
+	}
+	return rv
+}
+
 // =====
 // Utils
 // =====
@@ -139,7 +229,10 @@ func (ctx *Context) newBool(b bool) Value {
 	}
 }
 
-func isError(v Value) bool {
-	_, ok := v.(*Error)
-	return ok
+func isBreak(v Value) bool    { return v.Type() == BREAK }
+func isContinue(v Value) bool { return v.Type() == CONTINUE }
+func isError(v Value) bool    { return v.Type() == ERROR }
+
+func (ctx *Context) isTruthy(v Value) bool {
+	return v != ctx._false && v != ctx._nil
 }

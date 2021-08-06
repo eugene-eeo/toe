@@ -131,6 +131,10 @@ func (r *Resolver) resolve(node parser.Node) {
 func (r *Resolver) resolveLet(node *parser.Let) {
 	name := node.Name.Tok().Lexeme
 	curr := r.curr()
+	if _, ok := curr[name]; ok {
+		// is there already an existing let?
+		r.err(node.Tok(), "already a variable with this name in scope.")
+	}
 	curr[name] = false
 	r.resolve(node.Value)
 	curr[name] = true
@@ -239,7 +243,7 @@ func (r *Resolver) resolveIdentifier(node *parser.Identifier) {
 				r.err(node.Token, fmt.Sprintf("cannot access %q before initialization", name))
 				return
 			}
-			r.Locs[node] = i
+			r.Locs[node] = curr - i
 			return
 		}
 	}

@@ -67,10 +67,6 @@ func TestParserInvalid(t *testing.T) {
 		{"u + v + (x + 1; (x) then(); if (x) then()", 3},
 		{"!!;", 1},
 		{"1 = 2; x", 2}, // should continue parsing
-		{"if (x) break;", 1},
-		{"if (x) continue;", 1},
-		{"if (x) { break; 1 }", 3},
-		{"break;", 1},
 		{"x.1;", 1},
 	}
 	for i, test := range tests {

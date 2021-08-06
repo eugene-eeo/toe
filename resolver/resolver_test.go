@@ -10,12 +10,20 @@ import (
 func TestResolver(t *testing.T) {
 	input := `
 let a = 1;
+let d = 3;
 {
 	let b = 2;
 	let c = 3;
 	a = c;
+	break;
+	{
+		let u = b + d;
+		let u = 3;
+	}
+	let d = d;
 }
 c;
+let e = d + 1;
 continue;
 `
 	fn := ""

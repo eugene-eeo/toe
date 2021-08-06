@@ -3,15 +3,21 @@ package main
 // implements a toe repl
 
 import (
+	"bufio"
 	"fmt"
 	"os"
-	"bufio"
 	"toe/eval"
 	"toe/lexer"
 	"toe/parser"
 )
 
+var LOGO = `
+_|_ _  _
+ |_(_)(/_
+ `
+
 func main() {
+	fmt.Println(LOGO)
 	scanner := bufio.NewScanner(os.Stdin)
 	ctx := eval.NewContext()
 	env, _ := ctx.NewModuleEnv("<stdin>")

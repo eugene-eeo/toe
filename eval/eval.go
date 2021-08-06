@@ -8,17 +8,20 @@ import (
 	"toe/parser"
 )
 
+var (
+	NIL = &Nil{}
+	TRUE = &Boolean{true}
+	FALSE = &Boolean{false}
+)
+
 type Context struct {
 	Env     *Environment // current executing environment.
 	Globals *Environment // globals environment.
 	// 'global' values
 	_Object   *Object  // Object
 	_Nil      *Object  // Nil (prototype of nil)
-	_nil      *Nil     // nil
 	_Boolean  *Object  // Boolean
 	_Function *Object  // Function
-	_true     *Boolean // true
-	_false    *Boolean // false
 	_Number   *Object  // Number
 	_String   *Object  // String
 	_Array    *Object
@@ -30,11 +33,8 @@ func NewContext() *Context {
 	// bootstrap the object system
 	ctx._Object = newObject(nil)
 	ctx._Nil = newObject(ctx._Object) // even nil is an Object
-	ctx._nil = &Nil{}
 	ctx._Boolean = newObject(ctx._Object)
 	ctx._Function = newObject(ctx._Object)
-	ctx._true = &Boolean{true}
-	ctx._false = &Boolean{false}
 	ctx._Number = newObject(ctx._Object)
 	ctx._String = newObject(ctx._Object)
 	ctx._Array = newObject(ctx._Object)
@@ -91,7 +91,7 @@ func (ctx *Context) Eval(node parser.Node) Value {
 				return value
 			}
 			ctx.Env.Define(name, value)
-			return ctx._nil
+			return NIL
 		}
 	case *parser.While:
 		return ctx.evalWhile(node)
@@ -126,6 +126,12 @@ func (ctx *Context) Eval(node parser.Node) Value {
 			env.Define(name, value)
 			return value
 		}
+	case *parser.Unary:
+		right := ctx.Eval(node.Right)
+		if isError(right) {
+			return right
+		}
+		return ctx.evalUnary(node.Tok().Type, right)
 	case *parser.Binary:
 		left := ctx.Eval(node.Left)
 		if isError(left) {
@@ -144,11 +150,11 @@ func (ctx *Context) Eval(node parser.Node) Value {
 		case lexer.STRING:
 			return &String{node.Token.Literal.(string)}
 		case lexer.NIL:
-			return ctx._nil
+			return NIL
 		case lexer.TRUE:
-			return ctx._true
+			return TRUE
 		case lexer.FALSE:
-			return ctx._false
+			return FALSE
 		}
 	}
 	return &Error{&String{fmt.Sprintf("not implemented yet: %#+v", node)}}
@@ -170,15 +176,14 @@ func (ctx *Context) evalFor(node *parser.For) Value {
 		// havent found an iterator?
 		return &Error{&String{fmt.Sprintf("not iterable")}}
 	}
-	// the default return value is nil. if we meet an error,
-	// then we would set rv = that error.
-	var rv Value = ctx._nil
+	loopRv := Value(NIL)
+	loopVar := node.Name.Tok().Lexeme
 	ctx.pushEnv()
 	defer ctx.popEnv()
 	for {
 		done := iter.Done()
 		if isError(done) {
-			rv = done
+			loopRv = done
 			break
 		}
 		if ctx.isTruthy(done) {
@@ -186,23 +191,24 @@ func (ctx *Context) evalFor(node *parser.For) Value {
 		}
 		next := iter.Next()
 		if isError(next) {
-			rv = next
+			loopRv = next
 			break
 		}
-		ctx.Env.Define(node.Name.Tok().Lexeme, next)
-		round := ctx.Eval(node.Stmt)
+		ctx.Env.Define(loopVar, next)
+		res := ctx.Eval(node.Stmt)
 		switch {
-		case isError(round):
-			rv = round
+		case isError(res):
+			loopRv = res
 			break
-		case isBreak(round):
+		case isBreak(res):
 			break
 		}
 	}
+	// we _always_ evaluate iter.End()
 	if v := iter.End(); isError(v) {
 		return v
 	}
-	return rv
+	return loopRv
 }
 
 func (ctx *Context) evalWhile(node *parser.While) Value {
@@ -222,13 +228,13 @@ func (ctx *Context) evalWhile(node *parser.While) Value {
 			break
 		}
 	}
-	return ctx._nil
+	return NIL
 }
 
 func (ctx *Context) evalBlock(node *parser.Block) Value {
 	// Blocks evaluate to the return-value of the last statement in the block.
 	// Where we encounter continue / break, we will return that signal.
-	var rv Value = ctx._nil
+	var rv Value = NIL
 	ctx.pushEnv()
 	defer ctx.popEnv()
 	for _, stmt := range node.Statements {
@@ -244,11 +250,11 @@ func (ctx *Context) evalBlock(node *parser.Block) Value {
 // Utils
 // =====
 
-func (ctx *Context) newBool(b bool) Value {
+func newBool(b bool) *Boolean {
 	if b {
-		return ctx._true
+		return TRUE
 	} else {
-		return ctx._false
+		return FALSE
 	}
 }
 
@@ -257,5 +263,5 @@ func isContinue(v Value) bool { return v.Type() == CONTINUE }
 func isError(v Value) bool    { return v.Type() == ERROR }
 
 func (ctx *Context) isTruthy(v Value) bool {
-	return v != ctx._false && v != ctx._nil
+	return v != FALSE && v != NIL
 }

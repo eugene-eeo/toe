@@ -8,7 +8,7 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[NIL-1]
+	_ = x[NIL_TYPE-1]
 	_ = x[STRING-2]
 	_ = x[BOOLEAN-3]
 	_ = x[NUMBER-4]
@@ -21,9 +21,9 @@ func _() {
 	_ = x[CONTINUE-11]
 }
 
-const _ValueType_name = "NILSTRINGBOOLEANNUMBEROBJECTARRAYBUILTINFUNCTIONERRORBREAKCONTINUE"
+const _ValueType_name = "NIL_TYPESTRINGBOOLEANNUMBEROBJECTARRAYBUILTINFUNCTIONERRORBREAKCONTINUE"
 
-var _ValueType_index = [...]uint8{0, 3, 9, 16, 22, 28, 33, 40, 48, 53, 58, 66}
+var _ValueType_index = [...]uint8{0, 8, 14, 21, 27, 33, 38, 45, 53, 58, 63, 71}
 
 func (i ValueType) String() string {
 	i -= 1

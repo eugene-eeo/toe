@@ -15,7 +15,7 @@ import (
 
 func (ctx *Context) getPrototype(obj Value) Value {
 	switch obj.Type() {
-	case NIL:
+	case NIL_TYPE:
 		return ctx._Nil
 	case STRING:
 		return ctx._String
@@ -58,7 +58,7 @@ func (ctx *Context) getAttr(src Value, attr string) (Value, bool) {
 // then this is set to the nil object.
 func (ctx *Context) callFunction(fn Value, this Value, args []Value) (rv Value, isCallable bool) {
 	if this == nil {
-		this = ctx._nil
+		this = NIL
 	}
 	switch fn := fn.(type) {
 	case *Builtin:
@@ -71,8 +71,6 @@ func (ctx *Context) callFunction(fn Value, this Value, args []Value) (rv Value, 
 // ================
 // Iterator Support
 // ================
-//
-// Iterators:
 //                     | let iterator = it.iter()
 //    for (x : it) {   | while !iterator.done() {
 //        ...          |    let x = iterator.next()
@@ -91,8 +89,8 @@ type StringIterator struct {
 	i   int
 }
 
-func (si *StringIterator) End() Value { return si.ctx._nil }
-func (si *StringIterator) Done() Value { return si.ctx.newBool(si.i >= len(si.s.value)) }
+func (si *StringIterator) End() Value { return NIL }
+func (si *StringIterator) Done() Value { return newBool(si.i >= len(si.s.value)) }
 func (si *StringIterator) Next() Value {
 	v := si.s.value[si.i]
 	si.i++
@@ -105,8 +103,8 @@ type ArrayIterator struct {
 	i   int
 }
 
-func (ai *ArrayIterator) End() Value { return ai.ctx._nil }
-func (ai *ArrayIterator) Done() Value { return ai.ctx.newBool(ai.i >= len(ai.arr.arr)) }
+func (ai *ArrayIterator) End() Value { return NIL }
+func (ai *ArrayIterator) Done() Value { return newBool(ai.i >= len(ai.arr.arr)) }
 func (ai *ArrayIterator) Next() Value {
 	v := ai.arr.arr[ai.i]
 	ai.i++
@@ -129,13 +127,25 @@ func (ctx *Context) getIterator(obj Value) (Iterator, bool) {
 // Operator Support
 // ================
 
+func (ctx *Context) evalUnary(op lexer.TokenType, right Value) Value {
+	switch op {
+	case lexer.BANG:
+		return newBool(!ctx.isTruthy(right))
+	case lexer.MINUS:
+		if right.Type() == NUMBER {
+			return &Number{-right.(*Number).value}
+		}
+	}
+	return &Error{&String{"unsupported operation"}}
+}
+
 func (ctx *Context) evalBinary(op lexer.TokenType, left, right Value) Value {
 	// Fast case, == and != can fall-back to pointer equality.
 	if op == lexer.EQUAL_EQUAL && left == right {
-		return ctx._true
+		return TRUE
 	}
 	if op == lexer.BANG_EQUAL && left != right {
-		return ctx._true
+		return TRUE
 	}
 	// See if we know how to handle the operator.
 	switch {
@@ -150,17 +160,17 @@ func (ctx *Context) evalNumberBinary(op lexer.TokenType, left, right *Number) Va
 	rhs := right.value
 	switch op {
 	case lexer.EQUAL_EQUAL:
-		return ctx.newBool(lhs == rhs)
+		return newBool(lhs == rhs)
 	case lexer.BANG_EQUAL:
-		return ctx.newBool(lhs != rhs)
+		return newBool(lhs != rhs)
 	case lexer.GREATER:
-		return ctx.newBool(lhs > rhs)
+		return newBool(lhs > rhs)
 	case lexer.GREATER_EQUAL:
-		return ctx.newBool(lhs >= rhs)
+		return newBool(lhs >= rhs)
 	case lexer.LESS:
-		return ctx.newBool(lhs < rhs)
+		return newBool(lhs < rhs)
 	case lexer.LESS_EQUAL:
-		return ctx.newBool(lhs <= rhs)
+		return newBool(lhs <= rhs)
 	case lexer.PLUS:
 		return &Number{lhs + rhs}
 	case lexer.MINUS:

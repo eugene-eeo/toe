@@ -11,7 +11,7 @@ type ValueType uint8
 
 const (
 	_ = ValueType(iota)
-	NIL
+	NIL_TYPE
 	STRING
 	BOOLEAN
 	NUMBER
@@ -43,7 +43,7 @@ type Object struct {
 	proto Value
 }
 
-func (v *Nil) Type() ValueType     { return NIL }
+func (v *Nil) Type() ValueType     { return NIL_TYPE }
 func (v *Boolean) Type() ValueType { return BOOLEAN }
 func (v *Number) Type() ValueType  { return NUMBER }
 func (v *String) Type() ValueType  { return STRING }

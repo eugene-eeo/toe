@@ -93,6 +93,8 @@ func (ctx *Context) Eval(node parser.Node) Value {
 			ctx.Env.Define(name, value)
 			return ctx._nil
 		}
+	case *parser.While:
+		return ctx.evalWhile(node)
 	case *parser.For:
 		return ctx.evalFor(node)
 	case *parser.Block:
@@ -173,7 +175,6 @@ func (ctx *Context) evalFor(node *parser.For) Value {
 	var rv Value = ctx._nil
 	ctx.pushEnv()
 	defer ctx.popEnv()
-	// now keep evaluating the stmt.
 	for {
 		done := iter.Done()
 		if isError(done) {
@@ -204,7 +205,29 @@ func (ctx *Context) evalFor(node *parser.For) Value {
 	return rv
 }
 
+func (ctx *Context) evalWhile(node *parser.While) Value {
+	for {
+		cond := ctx.Eval(node.Cond)
+		if isError(cond) {
+			return cond
+		}
+		if !ctx.isTruthy(cond) {
+			break
+		}
+		round := ctx.Eval(node.Stmt)
+		switch {
+		case isError(round):
+			return round
+		case isBreak(round):
+			break
+		}
+	}
+	return ctx._nil
+}
+
 func (ctx *Context) evalBlock(node *parser.Block) Value {
+	// Blocks evaluate to the return-value of the last statement in the block.
+	// Where we encounter continue / break, we will return that signal.
 	var rv Value = ctx._nil
 	ctx.pushEnv()
 	defer ctx.popEnv()

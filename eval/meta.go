@@ -52,17 +52,20 @@ func (ctx *Context) getAttr(src Value, attr string) (Value, bool) {
 	return nil, false
 }
 
+func (ctx *Context) bind(fn Value, this Value) Value {
+	switch fn.Type() {
+	case BUILTIN:
+		return fn.(*Builtin).Bind(this)
+	}
+	return fn
+}
+
 // callFunction calls the given function fn, with the given
 // this binding and arguments. If fn is not a _callable_, then
-// isCallable will be false. For convenience, if this == nil,
-// then this is set to the nil object.
-func (ctx *Context) callFunction(fn Value, this Value, args []Value) (rv Value, isCallable bool) {
-	if this == nil {
-		this = NIL
-	}
+// isCallable will be false.
+func (ctx *Context) callFunction(fn Value, args []Value) (rv Value, isCallable bool) {
 	switch fn := fn.(type) {
 	case *Builtin:
-		fn = fn.Bind(this)
 		return fn.Call(ctx, args), true
 	}
 	return nil, false
@@ -130,7 +133,7 @@ func (ctx *Context) getIterator(obj Value) (Iterator, bool) {
 func (ctx *Context) evalUnary(op lexer.TokenType, right Value) Value {
 	switch op {
 	case lexer.BANG:
-		return newBool(!ctx.isTruthy(right))
+		return newBool(!isTruthy(right))
 	case lexer.MINUS:
 		if right.Type() == NUMBER {
 			return &Number{-right.(*Number).value}

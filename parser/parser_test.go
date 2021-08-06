@@ -28,6 +28,10 @@ func TestParserValid(t *testing.T) {
 		{"if (true) { x = 1; } else nil;", "if (true) {(x = 1);} else nil;"},
 		{"for (x : a) if (x == 1) break;", "for (x : a) if ((x == 1)) break;"},
 		{"while (true) continue;", "while (true) continue;"},
+		{"true.x;", "(true.x);"},
+		{"true.x.y == 2.u;", "(((true.x).y) == (2.u));"},
+		{"true.x.y != 2.u.z or 2;", "((((true.x).y) != ((2.u).z)) or 2);"},
+		{"x.true.false.nil;", "(((x.true).false).nil);"},
 	}
 	for i, test := range tests {
 		var tokens []lexer.Token
@@ -67,6 +71,7 @@ func TestParserInvalid(t *testing.T) {
 		{"if (x) continue;", 1},
 		{"if (x) { break; 1 }", 3},
 		{"break;", 1},
+		{"x.1;", 1},
 	}
 	for i, test := range tests {
 		var tokens []lexer.Token

@@ -9,27 +9,25 @@ import (
 )
 
 var (
-	NIL = &Nil{}
-	TRUE = &Boolean{true}
+	NIL   = &Nil{}
+	TRUE  = &Boolean{true}
 	FALSE = &Boolean{false}
 )
 
 type Context struct {
-	Env     *Environment // current executing environment.
-	Globals *Environment // globals environment.
+	Env *Environment // current executing environment.
 	// 'global' values
-	_Object   *Object  // Object
-	_Nil      *Object  // Nil (prototype of nil)
-	_Boolean  *Object  // Boolean
-	_Function *Object  // Function
-	_Number   *Object  // Number
-	_String   *Object  // String
+	_Object   *Object // Object
+	_Nil      *Object // Nil (prototype of nil)
+	_Boolean  *Object // Boolean
+	_Function *Object // Function
+	_Number   *Object // Number
+	_String   *Object // String
 	_Array    *Object
 }
 
 func NewContext() *Context {
 	ctx := &Context{}
-	ctx.Globals = newEnvironment(nil)
 	// bootstrap the object system
 	ctx._Object = newObject(nil)
 	ctx._Nil = newObject(ctx._Object) // even nil is an Object
@@ -39,12 +37,6 @@ func NewContext() *Context {
 	ctx._String = newObject(ctx._Object)
 	ctx._Array = newObject(ctx._Object)
 	// todo: add methods here.
-	// define globals
-	ctx.Globals.Define("Object", ctx._Object)
-	ctx.Globals.Define("Boolean", ctx._Boolean)
-	ctx.Globals.Define("Number", ctx._Number)
-	ctx.Globals.Define("String", ctx._String)
-	ctx.Globals.Define("Array", ctx._Array)
 	return ctx
 }
 
@@ -55,11 +47,16 @@ func (ctx *Context) pushEnv() *Environment {
 }
 
 func (ctx *Context) NewModuleEnv(filename string) (*Environment, Value) {
-	new_env := newEnvironment(ctx.Globals)
+	new_env := newEnvironment(nil)
 	mod_obj := newObject(ctx._Object)
 	mod_obj.props["filename"] = &String{filename}
 	mod_obj.props["exports"] = newObject(ctx._Object)
 	new_env.Define("module", mod_obj)
+	new_env.Define("Object", ctx._Object)
+	new_env.Define("Boolean", ctx._Boolean)
+	new_env.Define("Number", ctx._Number)
+	new_env.Define("String", ctx._String)
+	new_env.Define("Array", ctx._Array)
 	return new_env, mod_obj
 }
 
@@ -104,6 +101,8 @@ func (ctx *Context) Eval(node parser.Node) Value {
 	case *parser.Continue:
 		return &Continue{}
 	// Expressions
+	case *parser.Get:
+		return ctx.evalGet(node)
 	case *parser.Identifier:
 		ident := node.Tok().Lexeme
 		rv, ok := ctx.Env.Get(ident)
@@ -186,7 +185,7 @@ func (ctx *Context) evalFor(node *parser.For) Value {
 			loopRv = done
 			break
 		}
-		if ctx.isTruthy(done) {
+		if isTruthy(done) {
 			break
 		}
 		next := iter.Next()
@@ -217,7 +216,7 @@ func (ctx *Context) evalWhile(node *parser.While) Value {
 		if isError(cond) {
 			return cond
 		}
-		if !ctx.isTruthy(cond) {
+		if !isTruthy(cond) {
 			break
 		}
 		round := ctx.Eval(node.Stmt)
@@ -246,6 +245,25 @@ func (ctx *Context) evalBlock(node *parser.Block) Value {
 	return rv
 }
 
+// ====================
+// Methods & Properties
+// ====================
+
+func (ctx *Context) evalGet(node *parser.Get) Value {
+	left := ctx.Eval(node.Left)
+	if isError(left) {
+		return left
+	}
+	attr := node.Right.Lexeme
+	v, ok := ctx.getAttr(left, attr)
+	if !ok {
+		return &Error{&String{
+			fmt.Sprintf("attribute not found: %q", attr),
+		}}
+	}
+	return ctx.bind(v, left)
+}
+
 // =====
 // Utils
 // =====
@@ -261,7 +279,4 @@ func newBool(b bool) *Boolean {
 func isBreak(v Value) bool    { return v.Type() == BREAK }
 func isContinue(v Value) bool { return v.Type() == CONTINUE }
 func isError(v Value) bool    { return v.Type() == ERROR }
-
-func (ctx *Context) isTruthy(v Value) bool {
-	return v != FALSE && v != NIL
-}
+func isTruthy(v Value) bool   { return v != FALSE && v != NIL }

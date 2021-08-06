@@ -51,7 +51,6 @@ const (
 	NIL
 	RETURN
 	SUPER
-	THIS
 	TRUE
 	WHILE
 	BREAK
@@ -72,7 +71,6 @@ var keywords = map[string]TokenType{
 	"nil":      NIL,
 	"return":   RETURN,
 	"super":    SUPER,
-	"this":     THIS,
 	"true":     TRUE,
 	"while":    WHILE,
 	"break":    BREAK,
@@ -97,8 +95,8 @@ type Error struct {
 	Message  string
 }
 
-func (e *Error) Error() string { return e.String() }
-func (e *Error) String() string {
+func (e Error) Error() string { return e.String() }
+func (e Error) String() string {
 	return fmt.Sprintf("%s:%d:%d: %s", e.Filename, e.Line, e.Column, e.Message)
 }
 

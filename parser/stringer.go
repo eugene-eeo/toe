@@ -134,6 +134,16 @@ func (node *Or) String() string {
 	return buf.String()
 }
 
+func (node *Get) String() string {
+	var buf bytes.Buffer
+	buf.WriteString("(")
+	buf.WriteString(node.Left.String())
+	buf.WriteString(node.Tok().Lexeme)
+	buf.WriteString(node.Right.Lexeme)
+	buf.WriteString(")")
+	return buf.String()
+}
+
 func (node *Unary) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("(")

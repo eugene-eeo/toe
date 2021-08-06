@@ -20,9 +20,9 @@ type Parser struct {
 const (
 	PREC_LOWEST  = iota
 	PREC_ASSIGN  // =
+	PREC_AND     // and, or
 	PREC_EQ      // ==, !=
 	PREC_CMP     // <=, <, >, >=
-	PREC_AND     // and, or
 	PREC_SUM     // +, -
 	PREC_PRODUCT // *, /
 	PREC_UNARY   // !, -
@@ -67,6 +67,7 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.MINUS:         p.binary,
 		lexer.STAR:          p.binary,
 		lexer.SLASH:         p.binary,
+		lexer.DOT:           p.get,
 	}
 	p.precedences = map[lexer.TokenType]int{
 		lexer.EQUAL:         PREC_ASSIGN,
@@ -82,6 +83,7 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.MINUS:         PREC_SUM,
 		lexer.STAR:          PREC_PRODUCT,
 		lexer.SLASH:         PREC_PRODUCT,
+		lexer.DOT:           PREC_CALL,
 	}
 	return p
 }
@@ -132,7 +134,7 @@ func (p *Parser) match(types ...lexer.TokenType) bool {
 func (p *Parser) Parse() *Module {
 	module := &Module{Filename: p.filename, Stmts: []Stmt{}}
 	for !p.isAtEnd() {
-		module.Stmts = append(module.Stmts, p.declaration(false))
+		module.Stmts = append(module.Stmts, p.declaration())
 	}
 	return module
 }
@@ -161,7 +163,7 @@ func (p *Parser) Parse() *Module {
 // note: since most of the let,for,... are keywords in Go,
 // they are named __Stmt().
 
-func (p *Parser) declaration(inLoop bool) (stmt Stmt) {
+func (p *Parser) declaration() (stmt Stmt) {
 	defer func() {
 		// This will be called repeatedly as we parse statements, so
 		// this is a good place to synchronize(). We have to make
@@ -179,25 +181,25 @@ func (p *Parser) declaration(inLoop bool) (stmt Stmt) {
 	if p.check(lexer.LET) {
 		stmt = p.letStmt()
 	} else {
-		stmt = p.statement(inLoop)
+		stmt = p.statement()
 	}
 	return
 }
 
-func (p *Parser) statement(inLoop bool) Stmt {
+func (p *Parser) statement() Stmt {
 	switch {
 	case p.check(lexer.FOR):
 		return p.forStmt()
 	case p.check(lexer.WHILE):
 		return p.whileStmt()
 	case p.check(lexer.IF):
-		return p.ifStmt(inLoop)
+		return p.ifStmt()
 	case p.check(lexer.LEFT_BRACE):
-		return p.blockStmt(inLoop)
+		return p.blockStmt()
 	case p.check(lexer.CONTINUE):
-		return p.continueStmt(inLoop)
+		return p.continueStmt()
 	case p.check(lexer.BREAK):
-		return p.breakStmt(inLoop)
+		return p.breakStmt()
 	}
 	return p.exprStmt()
 }
@@ -218,7 +220,7 @@ func (p *Parser) forStmt() Stmt {
 	p.expect(lexer.COLON, "expected :")
 	iter := p.expression()
 	p.expect(lexer.RIGHT_PAREN, "unclosed (")
-	stmt := p.statement(true)
+	stmt := p.statement()
 	return newFor(token, newIdentifier(ident), iter, stmt)
 }
 
@@ -227,51 +229,41 @@ func (p *Parser) whileStmt() Stmt {
 	p.expect(lexer.LEFT_PAREN, "expected (")
 	cond := p.expression()
 	p.expect(lexer.RIGHT_PAREN, "unclosed (")
-	stmt := p.statement(true)
+	stmt := p.statement()
 	return newWhile(token, cond, stmt)
 }
 
-func (p *Parser) ifStmt(inLoop bool) Stmt {
+func (p *Parser) ifStmt() Stmt {
 	token := p.consume()
 	p.expect(lexer.LEFT_PAREN, "expected (")
 	cond := p.expression()
 	p.expect(lexer.RIGHT_PAREN, "unclosed (")
-	then := p.statement(inLoop)
+	then := p.statement()
 	var elseStmt Stmt = nil
 	if p.match(lexer.ELSE) {
-		elseStmt = p.statement(inLoop)
+		elseStmt = p.statement()
 	}
 	return newIf(token, cond, then, elseStmt)
 }
 
-func (p *Parser) blockStmt(inLoop bool) Stmt {
+func (p *Parser) blockStmt() Stmt {
 	token := p.consume()
 	stmts := []Stmt{}
 	for !p.isAtEnd() && !p.check(lexer.RIGHT_BRACE) {
-		stmts = append(stmts, p.declaration(inLoop))
+		stmts = append(stmts, p.declaration())
 	}
 	p.expect(lexer.RIGHT_BRACE, "unmatched {")
 	return newBlock(token, stmts)
 }
 
-func (p *Parser) continueStmt(inLoop bool) Stmt {
+func (p *Parser) continueStmt() Stmt {
 	token := p.consume()
-	if !inLoop {
-		// it's necessary to error _after_ consuming the token,
-		// in order to: 1, give a correct token position, and
-		// 2, not crash (in case this is the _first_ token we
-		// see).
-		p.error(p.previous(), "unexpected continue outside of a loop")
-	}
 	p.expect(lexer.SEMICOLON, "expected ; after continue")
 	return newContinue(token)
 }
 
-func (p *Parser) breakStmt(inLoop bool) Stmt {
+func (p *Parser) breakStmt() Stmt {
 	token := p.consume()
-	if !inLoop {
-		p.error(p.previous(), "unexpected break outside of a loop")
-	}
 	p.expect(lexer.SEMICOLON, "expected ; after break")
 	return newBreak(token)
 }
@@ -330,6 +322,27 @@ func (p *Parser) assign(left Expr) Expr {
 		p.error(left.Tok(), "invalid assignment target")
 		return newAssign(tok, left, p.precedence(PREC_ASSIGN-1))
 	}
+}
+
+func (p *Parser) get(left Expr) Expr {
+	tok := p.consume()
+	right := p.precedence(PREC_CALL)
+	// we allow any names
+	switch right.Type() {
+	case IDENTIFIER:
+		return newGet(tok, left, right.Tok())
+	case LITERAL:
+		switch right.(*Literal).Tok().Type {
+		case lexer.NIL:
+			fallthrough
+		case lexer.TRUE:
+			fallthrough
+		case lexer.FALSE:
+			return newGet(tok, left, right.Tok())
+		}
+	}
+	panic(p.error(right.Tok(), "expected an identifier after ."))
+	return nil
 }
 
 func (p *Parser) binary(left Expr) Expr {

@@ -3,13 +3,10 @@ package main
 // implements a toe repl
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"toe/eval"
-	"toe/lexer"
-	"toe/parser"
-	"toe/resolver"
+	"github.com/chzyer/readline"
 )
 
 var LOGO = `
@@ -29,55 +26,28 @@ func reportErrors(errors []error) bool {
 
 func main() {
 	fmt.Println(LOGO)
-	scanner := bufio.NewScanner(os.Stdin)
-	res := resolver.New(&parser.Module{Filename: "<stdin>"})
-	ctx := eval.NewContext(res.Locs)
-	env, _ := ctx.NewModuleEnv("<stdin>")
-	ctx.Env = env
+	rl, err := readline.New("> ")
+	if err != nil {
+		panic(err)
+	}
+	defer rl.Close()
+
+	ctx := eval.NewInteractiveContext()
 	for {
-		fmt.Printf("> ")
-		if !scanner.Scan() {
-			fmt.Println()
-			return
+		line, err := rl.Readline()
+		if err != nil {
+			break
 		}
-		line := scanner.Text()
-		hasErrors := false
-
-		lexer := lexer.New("<stdin>", line)
-		lexer.ScanTokens()
-		hasErrors = reportErrors(lexer.Errors)
-
-		if hasErrors {
-			continue
-		}
-
-		parser := parser.New("<stdin>", lexer.Tokens)
-		module := parser.Parse()
-		hasErrors = reportErrors(parser.Errors)
-		if hasErrors {
-			continue
-		}
-
-		for _, stmt := range module.Stmts {
-			res.ResolveOne(stmt)
-			if hasErrors = reportErrors(res.Errors); hasErrors {
-				res.Errors = []error{}
-				break
-			}
-		}
-		if hasErrors {
-			continue
-		}
-		// all is well -- can execute!
-		for _, stmt := range module.Stmts {
-			rv := ctx.Eval(stmt)
-			if rv != nil {
-				if err, ok := rv.(*eval.Error); ok {
-					fmt.Printf("%#v\n", err.Reason)
-					break
-				} else {
-					fmt.Printf("%#v\n", rv)
-				}
+		u, errs := ctx.Run(line)
+		if errs != nil {
+			reportErrors(errs)
+		} else {
+			if u == nil {
+				continue
+			} else if u.Type() == eval.ERROR {
+				fmt.Fprintln(os.Stderr, u.(*eval.Error).String())
+			} else {
+				fmt.Println(ctx.Inspect(u))
 			}
 		}
 	}

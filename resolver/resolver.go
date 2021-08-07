@@ -63,6 +63,7 @@ func New(module *parser.Module) *Resolver {
 	scope["Number"] = true
 	scope["String"] = true
 	scope["Array"] = true
+	scope["Function"] = true
 	return r
 }
 

@@ -17,6 +17,8 @@ func (ctx *Context) getPrototype(obj Value) Value {
 	switch obj.Type() {
 	case NIL_TYPE:
 		return ctx._Nil
+	case BOOLEAN:
+		return ctx._Boolean
 	case STRING:
 		return ctx._String
 	case NUMBER:
@@ -151,7 +153,7 @@ func (ctx *Context) evalUnaryValues(op lexer.TokenType, right Value) Value {
 			return &Number{-right.(*Number).value}
 		}
 	}
-	return &Error{&String{"unsupported operation"}}
+	return ctx.err(&String{"unsupported operation"})
 }
 
 func (ctx *Context) evalBinaryValues(
@@ -169,8 +171,10 @@ func (ctx *Context) evalBinaryValues(
 	switch {
 	case left.Type() == NUMBER && right.Type() == NUMBER:
 		return ctx.evalNumberBinary(op, left.(*Number), right.(*Number))
+	case left.Type() == STRING && right.Type() == STRING:
+		return ctx.evalStringBinary(op, left.(*String), right.(*String))
 	}
-	return &Error{&String{"unsupported operation"}}
+	return ctx.err(&String{"unsupported operation"})
 }
 
 func (ctx *Context) evalNumberBinary(op lexer.TokenType, left, right *Number) Value {
@@ -198,5 +202,27 @@ func (ctx *Context) evalNumberBinary(op lexer.TokenType, left, right *Number) Va
 	case lexer.STAR:
 		return &Number{lhs * rhs}
 	}
-	return &Error{&String{fmt.Sprintf("unsupported op between numbers: %s", op)}}
+	return ctx.err(&String{fmt.Sprintf("unsupported op between numbers: %s", op)})
+}
+
+func (ctx *Context) evalStringBinary(op lexer.TokenType, left, right *String) Value {
+	lhs := left.value
+	rhs := right.value
+	switch op {
+	case lexer.EQUAL_EQUAL:
+		return newBool(lhs == rhs)
+	case lexer.BANG_EQUAL:
+		return newBool(lhs != rhs)
+	case lexer.GREATER:
+		return newBool(lhs > rhs)
+	case lexer.GREATER_EQUAL:
+		return newBool(lhs >= rhs)
+	case lexer.LESS:
+		return newBool(lhs < rhs)
+	case lexer.LESS_EQUAL:
+		return newBool(lhs <= rhs)
+	case lexer.PLUS:
+		return &String{lhs + rhs}
+	}
+	return ctx.err(&String{fmt.Sprintf("unsupported op between strings: %s", op)})
 }

@@ -15,8 +15,9 @@ var (
 )
 
 type Context struct {
-	Env  *Environment        // current executing environment.
-	locs map[parser.Expr]int // map of resolvable expressions to distance.
+	Env    *Environment        // current executing environment.
+	locs   map[parser.Expr]int // map of resolvable expressions to distance.
+	ctxs   []string            // list of contexts, for error tracing
 	// 'global' values
 	_Object   *Object // Object
 	_Nil      *Object // Nil (prototype of nil)
@@ -38,18 +39,44 @@ func NewContext(locs map[parser.Expr]int) *Context {
 	ctx._Number = newObject(ctx._Object)
 	ctx._String = newObject(ctx._Object)
 	ctx._Array = newObject(ctx._Object)
-	// todo: add methods here.
+	// methods
+	ctx._Object.props["clone"] = &Builtin{fn: _Object_clone}
+	ctx._Object.props["inspect"] = &Builtin{fn: _Object_inspect}
+
+	ctx._Nil.props["inspect"] = &Builtin{fn: _Nil_inspect}
+
+	ctx._Boolean.props["inspect"] = &Builtin{fn: _Boolean_inspect}
+
+	ctx._Function.props["bind"] = &Builtin{fn: _Function_bind}
+	ctx._Function.props["inspect"] = &Builtin{fn: _Function_inspect}
+
+	ctx._Number.props["inspect"] = &Builtin{fn: _Number_inspect}
+
+	ctx._String.props["length"] = &Builtin{fn: _String_length}
+	ctx._String.props["inspect"] = &Builtin{fn: _String_inspect}
 	return ctx
 }
 
+func (ctx *Context) err(reason Value) *Error {
+	return &Error{
+		ctx: ctx,
+		Reason: reason,
+		Trace: []TraceEntry{},
+	}
+}
+
+func (ctx *Context) popCtx() { ctx.ctxs = ctx.ctxs[:len(ctx.ctxs)-1] }
+func (ctx *Context) pushCtx(s string) { ctx.ctxs = append(ctx.ctxs, s) }
+func (ctx *Context) currCtx() string { return ctx.ctxs[len(ctx.ctxs)-1] }
+
 func (ctx *Context) popEnv() { ctx.Env = ctx.Env.outer }
 func (ctx *Context) pushEnv() *Environment {
-	ctx.Env = newEnvironment(ctx.Env)
+	ctx.Env = newEnvironment(ctx.Env.filename, ctx.Env)
 	return ctx.Env
 }
 
 func (ctx *Context) NewModuleEnv(filename string) (*Environment, Value) {
-	new_env := newEnvironment(nil)
+	new_env := newEnvironment(filename, nil)
 	mod_obj := newObject(ctx._Object)
 	mod_obj.props["filename"] = &String{filename}
 	mod_obj.props["exports"] = newObject(ctx._Object)
@@ -59,6 +86,7 @@ func (ctx *Context) NewModuleEnv(filename string) (*Environment, Value) {
 	new_env.Define("Number", ctx._Number)
 	new_env.Define("String", ctx._String)
 	new_env.Define("Array", ctx._Array)
+	new_env.Define("Function", ctx._Function)
 	return new_env, mod_obj
 }
 
@@ -66,12 +94,14 @@ func (ctx *Context) EvalModule(module *parser.Module) Value {
 	new_env, mod_obj := ctx.NewModuleEnv(module.Filename)
 	og_env := ctx.Env
 	ctx.Env = new_env
+	ctx.pushCtx("<module>")
 	for _, stmt := range module.Stmts {
 		v := ctx.Eval(stmt)
 		if isError(v) {
 			return v
 		}
 	}
+	ctx.popCtx()
 	ctx.Env = og_env
 	return mod_obj
 }
@@ -145,7 +175,7 @@ func (ctx *Context) Eval(node parser.Node) Value {
 			return FALSE
 		}
 	}
-	return &Error{&String{fmt.Sprintf("not implemented yet: %#+v", node)}}
+	return ctx.err(&String{fmt.Sprintf("not implemented yet: %#+v", node)})
 }
 
 // ===========
@@ -161,7 +191,11 @@ func (ctx *Context) evalBinary(node *parser.Binary) Value {
 	if isError(right) {
 		return right
 	}
-	return ctx.evalBinaryValues(node.Token.Type, left, right)
+	rv := ctx.evalBinaryValues(node.Token.Type, left, right)
+	if isError(rv) {
+		rv.(*Error).addTrace(ctx.Env.filename, node.Token.Line, node.Token.Column)
+	}
+	return rv
 }
 
 func (ctx *Context) evalAnd(node *parser.And) Value {
@@ -185,7 +219,11 @@ func (ctx *Context) evalUnary(node *parser.Unary) Value {
 	if isError(right) {
 		return right
 	}
-	return ctx.evalUnaryValues(node.Tok().Type, right)
+	rv := ctx.evalUnaryValues(node.Tok().Type, right)
+	if isError(rv) {
+		rv.(*Error).addTrace(ctx.Env.filename, node.Token.Line, node.Token.Column)
+	}
+	return rv
 }
 
 func (ctx *Context) evalGet(node *parser.Get) Value {
@@ -196,9 +234,9 @@ func (ctx *Context) evalGet(node *parser.Get) Value {
 	attr := node.Name.Lexeme
 	v, ok := ctx.getAttr(object, attr)
 	if !ok {
-		return &Error{&String{
-			fmt.Sprintf("attribute not found: %q", attr),
-		}}
+		e := ctx.err(&String{fmt.Sprintf("attribute not found: %q", attr)})
+		e.addTrace(ctx.Env.filename, node.Token.Line, node.Token.Column)
+		return e
 	}
 	if node.Bound {
 		v = ctx.bind(v, object)
@@ -209,7 +247,7 @@ func (ctx *Context) evalGet(node *parser.Get) Value {
 func (ctx *Context) evalSet(node *parser.Set) Value {
 	object := ctx.Eval(node.Object)
 	if isError(object) {
-		return object;
+		return object
 	}
 	attr := node.Name.Lexeme
 	value := ctx.Eval(node.Right)
@@ -218,9 +256,9 @@ func (ctx *Context) evalSet(node *parser.Set) Value {
 	}
 	rv, ok := ctx.setAttr(object, attr, value)
 	if !ok {
-		return &Error{&String{
-			fmt.Sprintf("cannot set attribute %q", attr),
-		}}
+		e := ctx.err(&String{fmt.Sprintf("cannot set attribute %q", attr)})
+		e.addTrace(ctx.Env.filename, node.Token.Line, node.Token.Column)
+		return e
 	}
 	if node.Bound {
 		rv = ctx.bind(rv, object)
@@ -242,19 +280,24 @@ func (ctx *Context) evalCall(node *parser.Call) Value {
 	}
 	rv, ok := ctx.callFunction(fn, args)
 	if !ok {
-		return &Error{&String{fmt.Sprintf("not callable")}}
+		e := ctx.err(&String{fmt.Sprintf("not callable")})
+		e.addTrace(ctx.Env.filename, node.Token.Line, node.Token.Column)
+		return e
 	}
 	// unwrap
 	if isReturn(rv) {
-		rv = rv.(*Return).value;
+		rv = rv.(*Return).value
+	}
+	if isError(rv) {
+		rv.(*Error).addTrace(ctx.Env.filename, node.Token.Line, node.Token.Column)
 	}
 	return rv
 }
 
 func (ctx *Context) evalFunction(node *parser.Function) Value {
 	return &Function{
-		this: nil,
-		node: node,
+		this:    nil,
+		node:    node,
 		closure: ctx.Env,
 	}
 }
@@ -263,7 +306,9 @@ func (ctx *Context) evalIdentifier(node *parser.Identifier) Value {
 	ident := node.Tok().Lexeme
 	rv, ok := ctx.Env.GetAt(ctx.locs[node], ident)
 	if !ok {
-		return &Error{&String{fmt.Sprintf("unknown identifier %s", ident)}}
+		e := ctx.err(&String{fmt.Sprintf("unknown identifier %s", ident)})
+		e.addTrace(ctx.Env.filename, node.Token.Line, node.Token.Column)
+		return e
 	}
 	return rv
 }
@@ -297,7 +342,7 @@ func (ctx *Context) evalFor(node *parser.For) Value {
 	iter, ok := ctx.getIterator(it)
 	if !ok {
 		// havent found an iterator?
-		return &Error{&String{fmt.Sprintf("not iterable")}}
+		return ctx.err(&String{fmt.Sprintf("not iterable")})
 	}
 	loopRv := Value(NIL)
 	loopVar := node.Name.Tok().Lexeme
@@ -319,11 +364,10 @@ func (ctx *Context) evalFor(node *parser.For) Value {
 		}
 		ctx.Env.Define(loopVar, next)
 		res := ctx.Eval(node.Stmt)
-		switch {
-		case isReturn(res) || isError(res):
+		if isReturn(res) || isError(res) {
 			loopRv = res
 			break
-		case isBreak(res):
+		} else if isBreak(res) {
 			break
 		}
 	}
@@ -344,10 +388,9 @@ func (ctx *Context) evalWhile(node *parser.While) Value {
 			break
 		}
 		round := ctx.Eval(node.Stmt)
-		switch {
-		case isReturn(round) || isError(round):
+		if isReturn(round) || isError(round) {
 			return round
-		case isBreak(round):
+		} else if isBreak(round) {
 			break
 		}
 	}
@@ -374,7 +417,10 @@ func (ctx *Context) evalReturn(node *parser.Return) Value {
 	if node.Expr != nil {
 		rv = ctx.Eval(node.Expr)
 	}
-	return rv
+	if isError(rv) {
+		return rv
+	}
+	return &Return{rv}
 }
 
 // =====

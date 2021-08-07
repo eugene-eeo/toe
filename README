@@ -6,11 +6,11 @@
 
     small js-inspired language, based on prototypes and braces.
 
-      let Animal = Object.clone(nil);
+      let Animal = Object.clone();
       Animal.init = fn(legs) {
         this.legs = legs;
       };
-      let PetDog = Object.clone(Animal);
+      let PetDog = Animal.clone();
       PetDog.init = fn(name) {
         super.init(4);
         this.name = name;

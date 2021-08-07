@@ -1,12 +1,14 @@
 package eval
 
 type Environment struct {
-	store map[string]Value
-	outer *Environment
+	filename string // the filename of the module this environment encloses
+	store    map[string]Value
+	outer    *Environment
 }
 
-func newEnvironment(outer *Environment) *Environment {
+func newEnvironment(filename string, outer *Environment) *Environment {
 	return &Environment{
+		filename: filename,
 		store: map[string]Value{},
 		outer: outer,
 	}

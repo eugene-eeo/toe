@@ -6,6 +6,8 @@ package eval
 // and Return we simply ignore their prototypes).
 
 import (
+	"bytes"
+	"fmt"
 	"toe/parser"
 )
 
@@ -80,7 +82,13 @@ func (v *Builtin) Bind(this Value) *Builtin {
 }
 
 func (v *Builtin) Call(ctx *Context, args []Value) Value {
-	return v.fn(ctx, v.this, args)
+	this := v.this
+	if this == nil {
+		this = NIL
+	}
+	ctx.pushCtx("builtin function")
+	defer ctx.popCtx()
+	return v.fn(ctx, this, args)
 }
 
 type Function struct {
@@ -102,7 +110,8 @@ func (v *Function) Call(ctx *Context, args []Value) Value {
 	// remember the current environment
 	old_env := ctx.Env
 	// create a new environment with bound parameters
-	ctx.Env = newEnvironment(v.closure)
+	ctx.Env = newEnvironment(v.closure.filename, v.closure)
+	ctx.pushCtx("function")
 	this := v.this
 	if this == nil {
 		this = NIL
@@ -118,6 +127,7 @@ func (v *Function) Call(ctx *Context, args []Value) Value {
 	rv := ctx.Eval(v.node.Body)
 	// restore the old environment
 	ctx.Env = old_env
+	ctx.popCtx()
 	return rv
 }
 
@@ -126,7 +136,44 @@ func (v *Function) Call(ctx *Context, args []Value) Value {
 // ----------------------
 
 // Error is a currently propagating error (exception).
-type Error struct{ Reason Value }
+type Error struct {
+	ctx    *Context
+	Reason Value
+	Trace  []TraceEntry
+}
+
+func (e *Error) addTrace(filename string, line int, col int) {
+	e.Trace = append(e.Trace, TraceEntry{
+		Filename: filename,
+		Line:     line,
+		Column:   col,
+		Context:  e.ctx.currCtx(),
+	})
+}
+
+func (e *Error) String() string {
+	var buf bytes.Buffer
+	buf.WriteString("Call stack:\n")
+	for i := len(e.Trace) - 1; i >= 0; i-- {
+		buf.WriteString("  ")
+		buf.WriteString(e.Trace[i].String())
+		buf.WriteString("\n")
+	}
+	buf.WriteString(e.ctx.Inspect(e.Reason))
+	return buf.String()
+}
+
+// Not a value -- but entries on the stack trace.
+type TraceEntry struct {
+	Filename string
+	Line     int
+	Column   int
+	Context  string
+}
+
+func (te *TraceEntry) String() string {
+	return fmt.Sprintf("%s:%d:%d: in %s", te.Filename, te.Line, te.Column, te.Context)
+}
 
 // Break signals that a loop is being broken from.
 type Break struct{}

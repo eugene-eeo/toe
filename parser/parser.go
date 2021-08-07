@@ -10,7 +10,7 @@ type (
 type Parser struct {
 	filename      string
 	tokens        []lexer.Token
-	Errors        []ParserError
+	Errors        []error
 	curr          int // how many we have consumed.
 	unaryParsers  map[lexer.TokenType]unaryParser
 	binaryParsers map[lexer.TokenType]binaryParser
@@ -37,7 +37,7 @@ func New(fn string, tokens []lexer.Token) *Parser {
 	p := &Parser{
 		filename: fn,
 		tokens:   tokens,
-		Errors:   []ParserError{},
+		Errors:   []error{},
 		curr:     0,
 	}
 	p.unaryParsers = map[lexer.TokenType]unaryParser{

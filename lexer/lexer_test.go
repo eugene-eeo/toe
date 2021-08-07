@@ -39,7 +39,7 @@ func TestLexerBad(t *testing.T) {
 			t.Errorf("expected errors, got none")
 		}
 		for _, x := range lex.Errors {
-			t.Logf(x.String())
+			t.Logf("%s\n", x)
 		}
 	}
 }

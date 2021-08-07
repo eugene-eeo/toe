@@ -45,7 +45,7 @@ func TestParserValid(t *testing.T) {
 			t.Errorf("tests[%d] (%q)", i, test.input)
 			t.Error("parser errors:")
 			for _, err := range p.Errors {
-				t.Error(err.String())
+				t.Errorf("%s\n", err)
 			}
 			continue
 		}
@@ -94,7 +94,7 @@ func checkLexerErrors(t *testing.T, input string, out *[]lexer.Token) bool {
 	if len(l.Errors) != 0 {
 		t.Error("lexer errors:")
 		for _, err := range l.Errors {
-			t.Error(err.String())
+			t.Errorf("%s\n", err)
 		}
 		return false
 	}

@@ -42,7 +42,7 @@ type Resolver struct {
 	// to whether the variable was already initialised.
 	module *parser.Module
 	scopes []Scope
-	Errors []ResolverError
+	Errors []error
 	Locs   map[parser.Expr]int
 	ctrl   uint8 // control block -- whether we're in a loop / function
 }
@@ -51,7 +51,7 @@ func New(module *parser.Module) *Resolver {
 	r := &Resolver{
 		module: module,
 		scopes: []Scope{},
-		Errors: []ResolverError{},
+		Errors: []error{},
 		Locs:   map[parser.Expr]int{},
 		ctrl:   0,
 	}

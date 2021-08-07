@@ -104,7 +104,7 @@ type Lexer struct {
 	Filename string  // filename
 	source   string  // the complete source code
 	Tokens   []Token // list of tokens produced
-	Errors   []Error // list of lexer errors
+	Errors   []error // list of lexer errors
 	current  int     // where are we in the input?
 	line     int     // line and column positions
 	column   int     // NB: column position is in terms of runes

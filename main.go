@@ -17,6 +17,16 @@ _|_ _  _
  |_(_)(/_
  `
 
+func reportErrors(errors []error) bool {
+	if len(errors) == 0 {
+		return false
+	}
+	for _, err := range errors {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
+	}
+	return true
+}
+
 func main() {
 	fmt.Println(LOGO)
 	scanner := bufio.NewScanner(os.Stdin)
@@ -31,32 +41,35 @@ func main() {
 			return
 		}
 		line := scanner.Text()
+		hasErrors := false
+
 		lexer := lexer.New("<stdin>", line)
 		lexer.ScanTokens()
-		if len(lexer.Errors) != 0 {
-			for _, err := range lexer.Errors {
-				fmt.Printf("%s\n", err.String())
-			}
+		hasErrors = reportErrors(lexer.Errors)
+
+		if hasErrors {
 			continue
 		}
+
 		parser := parser.New("<stdin>", lexer.Tokens)
 		module := parser.Parse()
-		if len(parser.Errors) != 0 {
-			for _, err := range parser.Errors {
-				fmt.Printf("%s\n", err)
-			}
+		hasErrors = reportErrors(parser.Errors)
+		if hasErrors {
 			continue
 		}
+
 		for _, stmt := range module.Stmts {
 			res.ResolveOne(stmt)
-			if len(res.Errors) > 0 {
-				for _, err := range res.Errors {
-					fmt.Printf("%s\n", err)
-				}
-				// clear the errors.
-				res.Errors = []resolver.ResolverError{}
+			if hasErrors = reportErrors(res.Errors); hasErrors {
+				res.Errors = []error{}
 				break
 			}
+		}
+		if hasErrors {
+			continue
+		}
+		// all is well -- can execute!
+		for _, stmt := range module.Stmts {
 			rv := ctx.Eval(stmt)
 			if rv != nil {
 				// if rv.(*parser.Error) {

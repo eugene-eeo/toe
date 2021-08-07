@@ -120,8 +120,6 @@ func (ctx *Context) getIterator(obj Value) (Iterator, bool) {
 		return &ArrayIterator{ctx: ctx, arr: obj.(*Array)}, true
 	case STRING:
 		return &StringIterator{ctx: ctx, s: obj.(*String)}, true
-	// TODO: with user-given iterators, we need to freeze
-	// the current environment.
 	}
 	return nil, false
 }
@@ -130,7 +128,7 @@ func (ctx *Context) getIterator(obj Value) (Iterator, bool) {
 // Operator Support
 // ================
 
-func (ctx *Context) evalUnary(op lexer.TokenType, right Value) Value {
+func (ctx *Context) evalUnaryValues(op lexer.TokenType, right Value) Value {
 	switch op {
 	case lexer.BANG:
 		return newBool(!isTruthy(right))
@@ -142,7 +140,10 @@ func (ctx *Context) evalUnary(op lexer.TokenType, right Value) Value {
 	return &Error{&String{"unsupported operation"}}
 }
 
-func (ctx *Context) evalBinary(op lexer.TokenType, left, right Value) Value {
+func (ctx *Context) evalBinaryValues(
+	op lexer.TokenType,
+	left, right Value,
+) Value {
 	// Fast case, == and != can fall-back to pointer equality.
 	if op == lexer.EQUAL_EQUAL && left == right {
 		return TRUE

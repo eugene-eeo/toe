@@ -78,8 +78,6 @@ func (ctx *Context) EvalModule(module *parser.Module) Value {
 func (ctx *Context) Eval(node parser.Node) Value {
 	switch node := node.(type) {
 	// Statements
-	case *parser.ExprStmt:
-		return ctx.Eval(node.Expr)
 	case *parser.Let:
 		name := node.Name.Lexeme
 		value := ctx.Eval(node.Value)
@@ -88,26 +86,23 @@ func (ctx *Context) Eval(node parser.Node) Value {
 		}
 		ctx.Env.Define(name, value)
 		return NIL
-	case *parser.While:
-		return ctx.evalWhile(node)
-	case *parser.For:
-		return ctx.evalFor(node)
 	case *parser.Block:
 		return ctx.evalBlock(node)
+	case *parser.For:
+		return ctx.evalFor(node)
+	case *parser.While:
+		return ctx.evalWhile(node)
+	case *parser.If:
+		return ctx.evalIf(node)
+	case *parser.ExprStmt:
+		return ctx.Eval(node.Expr)
 	case *parser.Break:
 		return &Break{}
 	case *parser.Continue:
 		return &Continue{}
 	// Expressions
-	case *parser.Get:
-		return ctx.evalGet(node)
-	case *parser.Identifier:
-		ident := node.Tok().Lexeme
-		rv, ok := ctx.Env.GetAt(ctx.locs[node], ident)
-		if !ok {
-			return &Error{&String{fmt.Sprintf("unknown identifier %s", ident)}}
-		}
-		return rv
+	case *parser.Binary:
+		return ctx.evalBinary(node)
 	case *parser.Assign:
 		name := node.Name.Lexeme
 		value := ctx.Eval(node.Right)
@@ -117,21 +112,16 @@ func (ctx *Context) Eval(node parser.Node) Value {
 		ctx.Env.Ancestor(ctx.locs[node]).Define(name, value)
 		return value
 	case *parser.Unary:
-		right := ctx.Eval(node.Right)
-		if isError(right) {
-			return right
+		return ctx.evalUnary(node)
+	case *parser.Get:
+		return ctx.evalGet(node)
+	case *parser.Identifier:
+		ident := node.Tok().Lexeme
+		rv, ok := ctx.Env.GetAt(ctx.locs[node], ident)
+		if !ok {
+			return &Error{&String{fmt.Sprintf("unknown identifier %s", ident)}}
 		}
-		return ctx.evalUnary(node.Tok().Type, right)
-	case *parser.Binary:
-		left := ctx.Eval(node.Left)
-		if isError(left) {
-			return left
-		}
-		right := ctx.Eval(node.Right)
-		if isError(right) {
-			return right
-		}
-		return ctx.evalBinary(node.Token.Type, left, right)
+		return rv
 	// Literals
 	case *parser.Literal:
 		switch node.Tok().Type {
@@ -148,6 +138,49 @@ func (ctx *Context) Eval(node parser.Node) Value {
 		}
 	}
 	return &Error{&String{fmt.Sprintf("not implemented yet: %#+v", node)}}
+}
+
+// ===========
+// Expressions
+// ===========
+
+func (ctx *Context) evalBinary(node *parser.Binary) Value {
+	left := ctx.Eval(node.Left)
+	if isError(left) {
+		return left
+	}
+	right := ctx.Eval(node.Right)
+	if isError(right) {
+		return right
+	}
+	return ctx.evalBinaryValues(node.Token.Type, left, right)
+}
+
+func (ctx *Context) evalUnary(node *parser.Unary) Value {
+	right := ctx.Eval(node.Right)
+	if isError(right) {
+		return right
+	}
+	return ctx.evalUnaryValues(node.Tok().Type, right)
+}
+
+// ==========
+// Statements
+// ==========
+
+func (ctx *Context) evalIf(node *parser.If) Value {
+	cond := ctx.Eval(node.Cond)
+	if isError(cond) {
+		return cond
+	}
+	if isTruthy(cond) {
+		return ctx.Eval(node.Then)
+	} else {
+		if node.Else != nil {
+			return ctx.Eval(node.Else)
+		}
+		return NIL
+	}
 }
 
 // ===================

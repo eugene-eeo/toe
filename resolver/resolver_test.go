@@ -29,9 +29,9 @@ continue;
 if (d <= e or e > d) {
 	x;
 	for (x : "abc") {
-		if (x == "a") {
+		if (x == "a")
 			break;
-		}
+		x = 1;
 		continue;
 	}
 } else {

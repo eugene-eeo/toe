@@ -42,7 +42,7 @@ func (ctx *Context) getAttr(src Value, attr string) (Value, bool) {
 	proto := ctx.getPrototype(src)
 	for proto != nil {
 		if proto.Type() == OBJECT {
-			obj := src.(*Object)
+			obj := proto.(*Object)
 			if v, ok := obj.props[attr]; ok {
 				return v, true
 			}

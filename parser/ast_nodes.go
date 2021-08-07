@@ -150,9 +150,10 @@ func (node *Unary) Type() NodeType   { return UNARY }
 func (node *Unary) expr()            {}
 
 type Get struct {
-	Token lexer.Token
-	Left  Expr
-	Right lexer.Token
+	Token  lexer.Token
+	Object Expr
+	Name   lexer.Token
+	Bound  bool
 }
 
 func (node *Get) Tok() lexer.Token { return node.Token }
@@ -164,6 +165,7 @@ type Set struct {
 	Object Expr
 	Name   lexer.Token
 	Right  Expr
+	Bound  bool
 }
 
 func (node *Set) Tok() lexer.Token { return node.Token }
@@ -230,12 +232,12 @@ func newAssign(Token lexer.Token, Name lexer.Token, Right Expr) *Assign {
 
 func newUnary(Token lexer.Token, Right Expr) *Unary { return &Unary{Token: Token, Right: Right} }
 
-func newGet(Token lexer.Token, Left Expr, Right lexer.Token) *Get {
-	return &Get{Token: Token, Left: Left, Right: Right}
+func newGet(Token lexer.Token, Object Expr, Name lexer.Token, Bound bool) *Get {
+	return &Get{Token: Token, Object: Object, Name: Name, Bound: Bound}
 }
 
-func newSet(Token lexer.Token, Object Expr, Name lexer.Token, Right Expr) *Set {
-	return &Set{Token: Token, Object: Object, Name: Name, Right: Right}
+func newSet(Token lexer.Token, Object Expr, Name lexer.Token, Right Expr, Bound bool) *Set {
+	return &Set{Token: Token, Object: Object, Name: Name, Right: Right, Bound: Bound}
 }
 
 func newIdentifier(Token lexer.Token) *Identifier { return &Identifier{Token: Token} }

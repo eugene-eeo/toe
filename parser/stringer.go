@@ -137,9 +137,9 @@ func (node *Or) String() string {
 func (node *Get) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("(")
-	buf.WriteString(node.Left.String())
+	buf.WriteString(node.Object.String())
 	buf.WriteString(node.Tok().Lexeme)
-	buf.WriteString(node.Right.Lexeme)
+	buf.WriteString(node.Name.Lexeme)
 	buf.WriteString(")")
 	return buf.String()
 }
@@ -148,7 +148,11 @@ func (node *Set) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("(")
 	buf.WriteString(node.Object.String())
-	buf.WriteString(".")
+	if node.Bound {
+		buf.WriteString(".")
+	} else {
+		buf.WriteString("->")
+	}
 	buf.WriteString(node.Name.Lexeme)
 	buf.WriteString(" ")
 	buf.WriteString(node.Tok().Lexeme)

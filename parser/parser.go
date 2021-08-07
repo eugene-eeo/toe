@@ -26,7 +26,7 @@ const (
 	PREC_SUM     // +, -
 	PREC_PRODUCT // *, /
 	PREC_UNARY   // !, -
-	PREC_CALL    // (), .
+	PREC_CALL    // (), ., ->
 )
 
 // ====
@@ -68,6 +68,7 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.STAR:          p.binary,
 		lexer.SLASH:         p.binary,
 		lexer.DOT:           p.get,
+		lexer.MINUS_GREATER: p.get,
 	}
 	p.precedences = map[lexer.TokenType]int{
 		lexer.EQUAL:         PREC_ASSIGN,
@@ -84,6 +85,7 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.STAR:          PREC_PRODUCT,
 		lexer.SLASH:         PREC_PRODUCT,
 		lexer.DOT:           PREC_CALL,
+		lexer.MINUS_GREATER: PREC_CALL,
 	}
 	return p
 }
@@ -320,7 +322,7 @@ func (p *Parser) assign(left Expr) Expr {
 	switch left.Type() {
 	case GET:
 		get := left.(*Get)
-		return newSet(tok, get.Left, get.Right, right)
+		return newSet(tok, get.Object, get.Name, right, get.Bound)
 	case IDENTIFIER:
 		return newAssign(tok, left.Tok(), right)
 	default:
@@ -332,12 +334,28 @@ func (p *Parser) assign(left Expr) Expr {
 }
 
 func (p *Parser) get(left Expr) Expr {
+	// Be careful that are two kinds of attribute accesses.
+	// The typical syntax defaults to `binding' mode, since most of the
+	// time I expect that users would want to set callbacks; moreover
+	// this makes the syntax much more uniform (IMO) and explicit.
+	//
+	//     obj.x = other.fn   (attr 'fn' of other is bound to other)
+	//     obj.x = other->fn  (attr 'fn' of other is _not_ bound to other)
+	//
+	// a weird side-effect is that now the semantics for assignment has
+	// to be changed as well. This should be fine, since most of the time
+	// we don't use assignment results as an expression:
+	//
+	//     obj.a  = x  returns x bound to obj
+	//     obj->a = x  returns x
+	//
 	tok := p.consume()
+	bound := tok.Type == lexer.DOT // is this a binding access or not?
 	right := p.precedence(PREC_CALL)
 	// we allow any names
 	switch right.Type() {
 	case IDENTIFIER:
-		return newGet(tok, left, right.Tok())
+		return newGet(tok, left, right.Tok(), bound)
 	case LITERAL:
 		switch right.(*Literal).Tok().Type {
 		case lexer.NIL:
@@ -345,10 +363,10 @@ func (p *Parser) get(left Expr) Expr {
 		case lexer.TRUE:
 			fallthrough
 		case lexer.FALSE:
-			return newGet(tok, left, right.Tok())
+			return newGet(tok, left, right.Tok(), bound)
 		}
 	}
-	panic(p.error(right.Tok(), "expected an identifier after ."))
+	panic(p.error(right.Tok(), "expected an identifier after %s", tok.Lexeme))
 }
 
 func (p *Parser) binary(left Expr) Expr {

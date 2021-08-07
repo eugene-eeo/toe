@@ -52,6 +52,7 @@ func (ctx *Context) NewModuleEnv(filename string) (*Environment, Value) {
 	mod_obj := newObject(ctx._Object)
 	mod_obj.props["filename"] = &String{filename}
 	mod_obj.props["exports"] = newObject(ctx._Object)
+	// new_env.Define("puts", &Builtin{})
 	new_env.Define("module", mod_obj)
 	new_env.Define("Object", ctx._Object)
 	new_env.Define("Boolean", ctx._Boolean)
@@ -103,6 +104,10 @@ func (ctx *Context) Eval(node parser.Node) Value {
 	// Expressions
 	case *parser.Binary:
 		return ctx.evalBinary(node)
+	case *parser.And:
+		return ctx.evalAnd(node)
+	case *parser.Or:
+		return ctx.evalOr(node)
 	case *parser.Assign:
 		name := node.Name.Lexeme
 		value := ctx.Eval(node.Right)
@@ -115,6 +120,8 @@ func (ctx *Context) Eval(node parser.Node) Value {
 		return ctx.evalUnary(node)
 	case *parser.Get:
 		return ctx.evalGet(node)
+	case *parser.Set:
+		return ctx.evalSet(node)
 	case *parser.Identifier:
 		return ctx.evalIdentifier(node)
 	// Literals
@@ -151,12 +158,68 @@ func (ctx *Context) evalBinary(node *parser.Binary) Value {
 	return ctx.evalBinaryValues(node.Token.Type, left, right)
 }
 
+func (ctx *Context) evalAnd(node *parser.And) Value {
+	left := ctx.Eval(node.Left)
+	if isError(left) || !isTruthy(left) {
+		return left
+	}
+	return ctx.Eval(node.Right)
+}
+
+func (ctx *Context) evalOr(node *parser.Or) Value {
+	left := ctx.Eval(node.Left)
+	if isError(left) || isTruthy(left) {
+		return left
+	}
+	return ctx.Eval(node.Right)
+}
+
 func (ctx *Context) evalUnary(node *parser.Unary) Value {
 	right := ctx.Eval(node.Right)
 	if isError(right) {
 		return right
 	}
 	return ctx.evalUnaryValues(node.Tok().Type, right)
+}
+
+func (ctx *Context) evalGet(node *parser.Get) Value {
+	object := ctx.Eval(node.Object)
+	if isError(object) {
+		return object
+	}
+	attr := node.Name.Lexeme
+	v, ok := ctx.getAttr(object, attr)
+	if !ok {
+		return &Error{&String{
+			fmt.Sprintf("attribute not found: %q", attr),
+		}}
+	}
+	if node.Bound {
+		v = ctx.bind(v, object)
+	}
+	return v
+}
+
+func (ctx *Context) evalSet(node *parser.Set) Value {
+	object := ctx.Eval(node.Object)
+	if isError(object) {
+		return object;
+	}
+	attr := node.Name.Lexeme
+	value := ctx.Eval(node.Right)
+	if isError(value) {
+		return value
+	}
+	rv, ok := ctx.setAttr(object, attr, value)
+	if !ok {
+		return &Error{&String{
+			fmt.Sprintf("cannot set attribute %q", attr),
+		}}
+	}
+	if node.Bound {
+		rv = ctx.bind(rv, object)
+	}
+	return rv
 }
 
 func (ctx *Context) evalIdentifier(node *parser.Identifier) Value {
@@ -267,25 +330,6 @@ func (ctx *Context) evalIf(node *parser.If) Value {
 		}
 		return NIL
 	}
-}
-
-// ====================
-// Methods & Properties
-// ====================
-
-func (ctx *Context) evalGet(node *parser.Get) Value {
-	left := ctx.Eval(node.Left)
-	if isError(left) {
-		return left
-	}
-	attr := node.Right.Lexeme
-	v, ok := ctx.getAttr(left, attr)
-	if !ok {
-		return &Error{&String{
-			fmt.Sprintf("attribute not found: %q", attr),
-		}}
-	}
-	return ctx.bind(v, left)
 }
 
 // =====

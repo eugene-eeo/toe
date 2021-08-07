@@ -71,6 +71,16 @@ func (ctx *Context) callFunction(fn Value, args []Value) (rv Value, isCallable b
 	return nil, false
 }
 
+// setAttr sets an attribute on an object.
+func (ctx *Context) setAttr(obj Value, attr string, value Value) (Value, bool) {
+	switch obj := obj.(type) {
+	case *Object:
+		obj.props[attr] = value
+		return value, true
+	}
+	return nil, false
+}
+
 // ================
 // Iterator Support
 // ================

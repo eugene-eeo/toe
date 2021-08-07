@@ -34,6 +34,7 @@ func TestParserValid(t *testing.T) {
 		{"x.true.false.nil;", "(((x.true).false).nil);"},
 		{"a.b = true;", "(a.b = true);"},
 		{"x.true.u = 1;", "((x.true).u = 1);"},
+		{"a->b = true;", "(a->b = true);"},
 	}
 	for i, test := range tests {
 		var tokens []lexer.Token

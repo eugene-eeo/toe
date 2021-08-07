@@ -21,7 +21,6 @@ const (
 	COMMA
 	COLON
 	DOT
-	MINUS
 	PLUS
 	SEMICOLON
 	SLASH
@@ -35,6 +34,8 @@ const (
 	GREATER_EQUAL
 	LESS
 	LESS_EQUAL
+	MINUS
+	MINUS_GREATER // ->
 	// literals
 	IDENTIFIER
 	STRING
@@ -219,7 +220,11 @@ func (l *Lexer) scanToken() {
 	case '.':
 		l.emit(DOT)
 	case '-':
-		l.emit(MINUS)
+		if l.match('>') {
+			l.emit(MINUS_GREATER)
+		} else {
+			l.emit(MINUS)
+		}
 	case '+':
 		l.emit(PLUS)
 	case '*':

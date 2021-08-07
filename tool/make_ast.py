@@ -127,8 +127,8 @@ if __name__ == '__main__':
     expr('OR', 'Or', fields=['Left Expr', 'Right Expr'])
     expr('ASSIGN', 'Assign', fields=['Name lexer.Token', 'Right Expr'])
     expr('UNARY', 'Unary', fields=['Right Expr'])
-    expr('GET', 'Get', fields=['Left Expr', 'Right lexer.Token'])
-    expr('SET', 'Set', fields=['Object Expr', 'Name lexer.Token', 'Right Expr'])
+    expr('GET', 'Get', fields=['Object Expr', 'Name lexer.Token', 'Bound bool'])
+    expr('SET', 'Set', fields=['Object Expr', 'Name lexer.Token', 'Right Expr', 'Bound bool'])
     expr('IDENTIFIER', 'Identifier', fields=[])
     expr('LITERAL', 'Literal', fields=[])
     # autopep8: on

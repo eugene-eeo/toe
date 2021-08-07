@@ -57,6 +57,7 @@ func New(module *parser.Module) *Resolver {
 	}
 	r.push() // the global scope.
 	scope := r.curr()
+	// scope["puts"] = true
 	scope["module"] = true
 	scope["Object"] = true
 	scope["Boolean"] = true
@@ -132,6 +133,8 @@ func (r *Resolver) resolve(node parser.Node) {
 		r.resolveUnary(node)
 	case *parser.Get:
 		r.resolveGet(node)
+	case *parser.Set:
+		r.resolveSet(node)
 	case *parser.Identifier:
 		r.resolveIdentifier(node)
 	case *parser.Literal:
@@ -237,7 +240,12 @@ func (r *Resolver) resolveUnary(node *parser.Unary) {
 }
 
 func (r *Resolver) resolveGet(node *parser.Get) {
-	r.resolve(node.Left)
+	r.resolve(node.Object)
+}
+
+func (r *Resolver) resolveSet(node *parser.Set) {
+	r.resolve(node.Right)
+	r.resolve(node.Object)
 }
 
 func (r *Resolver) resolveIdentifier(node *parser.Identifier) {
@@ -269,13 +277,13 @@ func (r *Resolver) resolveLocal(node parser.Expr, token lexer.Token) {
 	}
 	if (r.ctrl & FUNC) != 0 {
 		// if we're in a function, then we find variables
-		// in the global scope -- this is to allow things
-		// like:
+		// in the global scope -- this allows things like:
 		//
 		//      let x = fn(b) {
 		//         return a + b;  // <-- `a' is found outside.
 		//      }
 		//      let a = 1;
+		//      x(2);
 		//
 		r.Locs[node] = curr
 	} else {

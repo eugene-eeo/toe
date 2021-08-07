@@ -15,7 +15,8 @@ var (
 )
 
 type Context struct {
-	Env *Environment // current executing environment.
+	Env  *Environment        // current executing environment.
+	locs map[parser.Expr]int // map of resolvable expressions to distance.
 	// 'global' values
 	_Object   *Object // Object
 	_Nil      *Object // Nil (prototype of nil)
@@ -26,7 +27,7 @@ type Context struct {
 	_Array    *Object
 }
 
-func NewContext() *Context {
+func NewContext(locs map[parser.Expr]int) *Context {
 	ctx := &Context{}
 	// bootstrap the object system
 	ctx._Object = newObject(nil)
@@ -80,16 +81,13 @@ func (ctx *Context) Eval(node parser.Node) Value {
 	case *parser.ExprStmt:
 		return ctx.Eval(node.Expr)
 	case *parser.Let:
-		switch left := node.Name.(type) {
-		case *parser.Identifier:
-			name := left.Token.Lexeme
-			value := ctx.Eval(node.Value)
-			if isError(value) {
-				return value
-			}
-			ctx.Env.Define(name, value)
-			return NIL
+		name := node.Name.Lexeme
+		value := ctx.Eval(node.Value)
+		if isError(value) {
+			return value
 		}
+		ctx.Env.Define(name, value)
+		return NIL
 	case *parser.While:
 		return ctx.evalWhile(node)
 	case *parser.For:
@@ -105,26 +103,19 @@ func (ctx *Context) Eval(node parser.Node) Value {
 		return ctx.evalGet(node)
 	case *parser.Identifier:
 		ident := node.Tok().Lexeme
-		rv, ok := ctx.Env.Get(ident)
+		rv, ok := ctx.Env.GetAt(ctx.locs[node], ident)
 		if !ok {
 			return &Error{&String{fmt.Sprintf("unknown identifier %s", ident)}}
 		}
 		return rv
 	case *parser.Assign:
-		switch left := node.Left.(type) {
-		case *parser.Identifier:
-			name := left.Token.Lexeme
-			value := ctx.Eval(node.Right)
-			if isError(value) {
-				return value
-			}
-			env := ctx.Env.Resolve(name)
-			if env == nil {
-				return &Error{&String{fmt.Sprintf("unknown identifier %s", name)}}
-			}
-			env.Define(name, value)
+		name := node.Name.Lexeme
+		value := ctx.Eval(node.Right)
+		if isError(value) {
 			return value
 		}
+		ctx.Env.Ancestor(ctx.locs[node]).Define(name, value)
+		return value
 	case *parser.Unary:
 		right := ctx.Eval(node.Right)
 		if isError(right) {

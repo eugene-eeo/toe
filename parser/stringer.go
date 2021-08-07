@@ -21,7 +21,7 @@ func (node *Let) String() string {
 	var buf bytes.Buffer
 	buf.WriteString(node.Tok().Lexeme)
 	buf.WriteString(" ")
-	buf.WriteString(node.Name.String())
+	buf.WriteString(node.Name.Lexeme)
 	buf.WriteString(" = ")
 	buf.WriteString(node.Value.String())
 	buf.WriteString(";")
@@ -89,7 +89,7 @@ func (node *Continue) String() string { return node.Tok().Lexeme + ";" }
 func (node *Assign) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("(")
-	buf.WriteString(node.Left.String())
+	buf.WriteString(node.Name.Lexeme)
 	buf.WriteString(" ")
 	buf.WriteString(node.Tok().Lexeme)
 	buf.WriteString(" ")

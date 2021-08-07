@@ -12,16 +12,21 @@ func newEnvironment(outer *Environment) *Environment {
 	}
 }
 
-// Resolve finds the environment where `name' is found.
-// If no such env is found, then the return value is nil.
-func (e *Environment) Resolve(name string) *Environment {
-	if _, ok := e.store[name]; ok {
-		return e
+// Ancestor returns the environment that is distance x
+// away from the current environment.
+func (e *Environment) Ancestor(distance int) *Environment {
+	for distance > 0 {
+		distance--
+		e = e.outer
 	}
-	if e.outer != nil {
-		return e.outer.Resolve(name)
-	}
-	return nil
+	return e
+}
+
+// GetAt gets the variable name at the environment that is distance x
+// away from the current environment.
+func (e *Environment) GetAt(distance int, name string) (Value, bool) {
+	val, ok := e.Ancestor(distance).store[name]
+	return val, ok
 }
 
 // Define binds the given name to the given value.
@@ -29,15 +34,15 @@ func (e *Environment) Define(name string, value Value) {
 	e.store[name] = value
 }
 
-// Get gets the given name from the environment, traversing
-// the outer environments if it is not found.
-func (e *Environment) Get(name string) (Value, bool) {
-	v, ok := e.store[name]
-	if ok {
-		return v, true
-	}
-	if e.outer != nil {
-		return e.outer.Get(name)
-	}
-	return nil, false
-}
+// // Get gets the given name from the environment, traversing
+// // the outer environments if it is not found.
+// func (e *Environment) Get(name string) (Value, bool) {
+// 	v, ok := e.store[name]
+// 	if ok {
+// 		return v, true
+// 	}
+// 	if e.outer != nil {
+// 		return e.outer.Get(name)
+// 	}
+// 	return nil, false
+// }

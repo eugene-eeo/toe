@@ -19,13 +19,14 @@ const (
 	ASSIGN
 	UNARY
 	GET
+	SET
 	IDENTIFIER
 	LITERAL
 )
 
 type Let struct {
 	Token lexer.Token
-	Name  Expr
+	Name  lexer.Token
 	Value Expr
 }
 
@@ -131,7 +132,7 @@ func (node *Or) expr()            {}
 
 type Assign struct {
 	Token lexer.Token
-	Left  Expr
+	Name  lexer.Token
 	Right Expr
 }
 
@@ -158,6 +159,17 @@ func (node *Get) Tok() lexer.Token { return node.Token }
 func (node *Get) Type() NodeType   { return GET }
 func (node *Get) expr()            {}
 
+type Set struct {
+	Token  lexer.Token
+	Object Expr
+	Name   lexer.Token
+	Right  Expr
+}
+
+func (node *Set) Tok() lexer.Token { return node.Token }
+func (node *Set) Type() NodeType   { return SET }
+func (node *Set) expr()            {}
+
 type Identifier struct {
 	Token lexer.Token
 }
@@ -174,7 +186,7 @@ func (node *Literal) Tok() lexer.Token { return node.Token }
 func (node *Literal) Type() NodeType   { return LITERAL }
 func (node *Literal) expr()            {}
 
-func newLet(Token lexer.Token, Name Expr, Value Expr) *Let {
+func newLet(Token lexer.Token, Name lexer.Token, Value Expr) *Let {
 	return &Let{Token: Token, Name: Name, Value: Value}
 }
 
@@ -212,14 +224,18 @@ func newOr(Token lexer.Token, Left Expr, Right Expr) *Or {
 	return &Or{Token: Token, Left: Left, Right: Right}
 }
 
-func newAssign(Token lexer.Token, Left Expr, Right Expr) *Assign {
-	return &Assign{Token: Token, Left: Left, Right: Right}
+func newAssign(Token lexer.Token, Name lexer.Token, Right Expr) *Assign {
+	return &Assign{Token: Token, Name: Name, Right: Right}
 }
 
 func newUnary(Token lexer.Token, Right Expr) *Unary { return &Unary{Token: Token, Right: Right} }
 
 func newGet(Token lexer.Token, Left Expr, Right lexer.Token) *Get {
 	return &Get{Token: Token, Left: Left, Right: Right}
+}
+
+func newSet(Token lexer.Token, Object Expr, Name lexer.Token, Right Expr) *Set {
+	return &Set{Token: Token, Object: Object, Name: Name, Right: Right}
 }
 
 func newIdentifier(Token lexer.Token) *Identifier { return &Identifier{Token: Token} }

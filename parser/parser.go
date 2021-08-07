@@ -210,7 +210,7 @@ func (p *Parser) letStmt() Stmt {
 	p.expect(lexer.EQUAL, "expected =")
 	expr := p.expression()
 	p.expect(lexer.SEMICOLON, "expected ; after variable declaration")
-	return newLet(token, newIdentifier(ident), expr)
+	return newLet(token, ident, expr)
 }
 
 func (p *Parser) forStmt() Stmt {
@@ -271,6 +271,9 @@ func (p *Parser) breakStmt() Stmt {
 func (p *Parser) exprStmt() Stmt {
 	expr := p.expression()
 	p.expect(lexer.SEMICOLON, "expected ; after expression statement")
+	if expr == nil {
+		return nil
+	}
 	return newExprStmt(expr.Tok(), expr)
 }
 
@@ -313,14 +316,15 @@ func (p *Parser) grouping() Expr {
 
 func (p *Parser) assign(left Expr) Expr {
 	tok := p.consume()
+	right := p.precedence(PREC_ASSIGN-1)
 	switch left.Type() {
 	case IDENTIFIER:
-		return newAssign(tok, left, p.precedence(PREC_ASSIGN-1))
+		return newAssign(tok, left.Tok(), right)
 	default:
 		// this is not an error worth panicking over.
 		// just move along -- we will put it in `.errors'.
 		p.error(left.Tok(), "invalid assignment target")
-		return newAssign(tok, left, p.precedence(PREC_ASSIGN-1))
+		return nil
 	}
 }
 
@@ -342,7 +346,6 @@ func (p *Parser) get(left Expr) Expr {
 		}
 	}
 	panic(p.error(right.Tok(), "expected an identifier after ."))
-	return nil
 }
 
 func (p *Parser) binary(left Expr) Expr {

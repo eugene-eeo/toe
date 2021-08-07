@@ -39,6 +39,7 @@ func_template = "func new{name}({args}) *{name} {{ return &{name}{{ {props} }} }
 FUNCS = []
 TYPES = []
 STRUCTS = []
+STRUCT_TYPES = []
 
 
 def node(type, name, *, fields, is_expression):
@@ -57,13 +58,14 @@ def node(type, name, *, fields, is_expression):
             name=name, func_name=func_name, type=type, body=body)
         for func_name, type, body
         in [
-            ('Tok',  'lexer.Token', 'return node.Token'),
-            ('Type', 'NodeType',    f'return {type}'),
+            ('Tok', 'lexer.Token', 'return node.Token'),
+            ('Type', 'NodeType', f'return {type}'),
             ('expr', '', '') if is_expression else ('stmt', '', ''),
         ]
     ]
+    STRUCT_TYPES.append(name)
     FUNCS.append(constructor)
-    TYPES.append(f"\t{type}")
+    TYPES.append(type)
     STRUCTS.append(struct_template.format(
         name=name,
         fields="\n".join(f"\t{field}" for field in fields),
@@ -80,6 +82,9 @@ def stmt(*args, **kwargs):
 
 
 def generate():
+    if len(set(TYPES)) != len(set(STRUCT_TYPES)):
+        print("Expected same number of NodeType constants as struct types", file=os.stderr)
+        os.exit(1)
     input = package_template.format(
         functions="\n\n".join(FUNCS),
         types="\n".join(TYPES),
@@ -108,7 +113,7 @@ def generate():
 if __name__ == '__main__':
     # autopep8: off
     # Statements
-    stmt('LET', 'Let', fields=['Name Expr', 'Value Expr'])
+    stmt('LET', 'Let', fields=['Name lexer.Token', 'Value Expr'])
     stmt('BLOCK', 'Block', fields=['Statements []Stmt'])
     stmt('FOR', 'For', fields=['Name Expr', 'Iter Expr', 'Stmt Stmt'])
     stmt('WHILE', 'While', fields=['Cond Expr', 'Stmt Stmt'])
@@ -120,9 +125,10 @@ if __name__ == '__main__':
     expr('BINARY', 'Binary', fields=['Left Expr', 'Right Expr'])
     expr('AND', 'And', fields=['Left Expr', 'Right Expr'])
     expr('OR', 'Or', fields=['Left Expr', 'Right Expr'])
-    expr('ASSIGN', 'Assign', fields=['Left Expr', 'Right Expr'])
-    expr('UNARY', 'Unary',  fields=['Right Expr'])
+    expr('ASSIGN', 'Assign', fields=['Name lexer.Token', 'Right Expr'])
+    expr('UNARY', 'Unary', fields=['Right Expr'])
     expr('GET', 'Get', fields=['Left Expr', 'Right lexer.Token'])
+    expr('SET', 'Set', fields=['Object Expr', 'Name lexer.Token', 'Right Expr'])
     expr('IDENTIFIER', 'Identifier', fields=[])
     expr('LITERAL', 'Literal', fields=[])
     # autopep8: on

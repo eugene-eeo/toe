@@ -10,6 +10,7 @@ import (
 func TestResolver(t *testing.T) {
 	input := `
 let a = 1;
+let c = 2;
 let d = 3;
 {
 	let b = 2;
@@ -22,9 +23,20 @@ let d = 3;
 	}
 	let d = d;
 }
-c;
+e;
 let e = d + 1;
 continue;
+if (d <= e or e > d) {
+	x;
+	for (x : "abc") {
+		if (x == "a") {
+			break;
+		}
+		continue;
+	}
+} else {
+	y;
+}
 `
 	fn := ""
 	l := lexer.New(fn, input)

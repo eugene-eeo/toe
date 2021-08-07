@@ -29,6 +29,7 @@ type Context struct {
 
 func NewContext(locs map[parser.Expr]int) *Context {
 	ctx := &Context{}
+	ctx.locs = locs
 	// bootstrap the object system
 	ctx._Object = newObject(nil)
 	ctx._Nil = newObject(ctx._Object) // even nil is an Object
@@ -52,7 +53,6 @@ func (ctx *Context) NewModuleEnv(filename string) (*Environment, Value) {
 	mod_obj := newObject(ctx._Object)
 	mod_obj.props["filename"] = &String{filename}
 	mod_obj.props["exports"] = newObject(ctx._Object)
-	// new_env.Define("puts", &Builtin{})
 	new_env.Define("module", mod_obj)
 	new_env.Define("Object", ctx._Object)
 	new_env.Define("Boolean", ctx._Boolean)
@@ -101,6 +101,8 @@ func (ctx *Context) Eval(node parser.Node) Value {
 		return &Break{}
 	case *parser.Continue:
 		return &Continue{}
+	case *parser.Return:
+		return ctx.evalReturn(node)
 	// Expressions
 	case *parser.Binary:
 		return ctx.evalBinary(node)
@@ -122,8 +124,12 @@ func (ctx *Context) Eval(node parser.Node) Value {
 		return ctx.evalGet(node)
 	case *parser.Set:
 		return ctx.evalSet(node)
+	case *parser.Call:
+		return ctx.evalCall(node)
 	case *parser.Identifier:
 		return ctx.evalIdentifier(node)
+	case *parser.Function:
+		return ctx.evalFunction(node)
 	// Literals
 	case *parser.Literal:
 		switch node.Tok().Type {
@@ -222,6 +228,37 @@ func (ctx *Context) evalSet(node *parser.Set) Value {
 	return rv
 }
 
+func (ctx *Context) evalCall(node *parser.Call) Value {
+	fn := ctx.Eval(node.Fn)
+	if isError(fn) {
+		return fn
+	}
+	args := make([]Value, len(node.Args))
+	for i, arg := range node.Args {
+		args[i] = ctx.Eval(arg)
+		if isError(args[i]) {
+			return args[i]
+		}
+	}
+	rv, ok := ctx.callFunction(fn, args)
+	if !ok {
+		return &Error{&String{fmt.Sprintf("not callable")}}
+	}
+	// unwrap
+	if isReturn(rv) {
+		rv = rv.(*Return).value;
+	}
+	return rv
+}
+
+func (ctx *Context) evalFunction(node *parser.Function) Value {
+	return &Function{
+		this: nil,
+		node: node,
+		closure: ctx.Env,
+	}
+}
+
 func (ctx *Context) evalIdentifier(node *parser.Identifier) Value {
 	ident := node.Tok().Lexeme
 	rv, ok := ctx.Env.GetAt(ctx.locs[node], ident)
@@ -243,7 +280,7 @@ func (ctx *Context) evalBlock(node *parser.Block) Value {
 	defer ctx.popEnv()
 	for _, stmt := range node.Statements {
 		rv = ctx.Eval(stmt)
-		if isError(rv) || isBreak(rv) || isContinue(rv) {
+		if isError(rv) || isBreak(rv) || isContinue(rv) || isReturn(rv) {
 			return rv
 		}
 	}
@@ -283,7 +320,7 @@ func (ctx *Context) evalFor(node *parser.For) Value {
 		ctx.Env.Define(loopVar, next)
 		res := ctx.Eval(node.Stmt)
 		switch {
-		case isError(res):
+		case isReturn(res) || isError(res):
 			loopRv = res
 			break
 		case isBreak(res):
@@ -308,7 +345,7 @@ func (ctx *Context) evalWhile(node *parser.While) Value {
 		}
 		round := ctx.Eval(node.Stmt)
 		switch {
-		case isError(round):
+		case isReturn(round) || isError(round):
 			return round
 		case isBreak(round):
 			break
@@ -332,6 +369,14 @@ func (ctx *Context) evalIf(node *parser.If) Value {
 	}
 }
 
+func (ctx *Context) evalReturn(node *parser.Return) Value {
+	rv := Value(NIL)
+	if node.Expr != nil {
+		rv = ctx.Eval(node.Expr)
+	}
+	return rv
+}
+
 // =====
 // Utils
 // =====
@@ -344,6 +389,7 @@ func newBool(b bool) *Boolean {
 	}
 }
 
+func isReturn(v Value) bool   { return v.Type() == RETURN }
 func isBreak(v Value) bool    { return v.Type() == BREAK }
 func isContinue(v Value) bool { return v.Type() == CONTINUE }
 func isError(v Value) bool    { return v.Type() == ERROR }

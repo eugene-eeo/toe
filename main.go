@@ -72,10 +72,12 @@ func main() {
 		for _, stmt := range module.Stmts {
 			rv := ctx.Eval(stmt)
 			if rv != nil {
-				// if rv.(*parser.Error) {
-				// 	fmt.Printf("%#v\n", rv)
-				// }
-				fmt.Printf("%#v\n", rv)
+				if err, ok := rv.(*eval.Error); ok {
+					fmt.Printf("%#v\n", err.Reason)
+					break
+				} else {
+					fmt.Printf("%#v\n", rv)
+				}
 			}
 		}
 	}

@@ -19,11 +19,12 @@ func _() {
 	_ = x[ERROR-9]
 	_ = x[BREAK-10]
 	_ = x[CONTINUE-11]
+	_ = x[RETURN-12]
 }
 
-const _ValueType_name = "NIL_TYPESTRINGBOOLEANNUMBEROBJECTARRAYBUILTINFUNCTIONERRORBREAKCONTINUE"
+const _ValueType_name = "NIL_TYPESTRINGBOOLEANNUMBEROBJECTARRAYBUILTINFUNCTIONERRORBREAKCONTINUERETURN"
 
-var _ValueType_index = [...]uint8{0, 8, 14, 21, 27, 33, 38, 45, 53, 58, 63, 71}
+var _ValueType_index = [...]uint8{0, 8, 14, 21, 27, 33, 38, 45, 53, 58, 63, 71, 77}
 
 func (i ValueType) String() string {
 	i -= 1

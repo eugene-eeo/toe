@@ -343,8 +343,10 @@ func (l *Lexer) lexString() {
 				buf.WriteRune('\r')
 			case 'n':
 				buf.WriteRune('\n')
+			case 't':
+				buf.WriteRune('\t')
 			default:
-				l.error("invalid escape in string literal: %q", "\\"+string(ch))
+				l.error("invalid escape in string literal: '%s'", "\\"+string(ch))
 			}
 			esc = false
 		}

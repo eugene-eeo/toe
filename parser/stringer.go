@@ -8,9 +8,9 @@ import (
 // TODO: find out some way we could automate this.
 
 func (node *Module) String() string {
-	stmts := []string{}
-	for _, stmt := range node.Stmts {
-		stmts = append(stmts, stmt.String())
+	stmts := make([]string, len(node.Stmts))
+	for i, stmt := range node.Stmts {
+		stmts[i] = stmt.String()
 	}
 	return strings.Join(stmts, "\n")
 }
@@ -83,6 +83,17 @@ func (node *ExprStmt) String() string {
 
 func (node *Break) String() string    { return node.Tok().Lexeme + ";" }
 func (node *Continue) String() string { return node.Tok().Lexeme + ";" }
+
+func (node *Return) String() string {
+	var buf bytes.Buffer
+	buf.WriteString(node.Tok().Lexeme)
+	if node.Expr != nil {
+		buf.WriteString(" ")
+		buf.WriteString(node.Expr.String())
+	}
+	buf.WriteString(";")
+	return buf.String()
+}
 
 // Expressions
 
@@ -171,5 +182,34 @@ func (node *Unary) String() string {
 	return buf.String()
 }
 
+func (node *Call) String() string {
+	var buf bytes.Buffer
+	args := make([]string, len(node.Args))
+	for i, arg := range node.Args {
+		args[i] = arg.String()
+	}
+	buf.WriteString("(")
+	buf.WriteString(node.Fn.String())
+	buf.WriteString(node.Tok().Lexeme)
+	buf.WriteString(strings.Join(args, ", "))
+	buf.WriteString(")")
+	buf.WriteString(")")
+	return buf.String()
+}
+
 func (node *Identifier) String() string { return node.Tok().Lexeme }
 func (node *Literal) String() string    { return node.Tok().Lexeme }
+
+func (node *Function) String() string {
+	var buf bytes.Buffer
+	params := make([]string, len(node.Params))
+	for i, tok := range node.Params {
+		params[i] = tok.Lexeme
+	}
+	buf.WriteString(node.Tok().Lexeme)
+	buf.WriteString("(")
+	buf.WriteString(strings.Join(params, ", "))
+	buf.WriteString(")")
+	buf.WriteString(node.Body.String())
+	return buf.String()
+}

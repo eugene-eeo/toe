@@ -33,16 +33,3 @@ func (e *Environment) GetAt(distance int, name string) (Value, bool) {
 func (e *Environment) Define(name string, value Value) {
 	e.store[name] = value
 }
-
-// // Get gets the given name from the environment, traversing
-// // the outer environments if it is not found.
-// func (e *Environment) Get(name string) (Value, bool) {
-// 	v, ok := e.store[name]
-// 	if ok {
-// 		return v, true
-// 	}
-// 	if e.outer != nil {
-// 		return e.outer.Get(name)
-// 	}
-// 	return nil, false
-// }

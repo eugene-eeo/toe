@@ -56,6 +56,8 @@ func (ctx *Context) bind(fn Value, this Value) Value {
 	switch fn.Type() {
 	case BUILTIN:
 		return fn.(*Builtin).Bind(this)
+	case FUNCTION:
+		return fn.(*Function).Bind(this)
 	}
 	return fn
 }
@@ -66,6 +68,8 @@ func (ctx *Context) bind(fn Value, this Value) Value {
 func (ctx *Context) callFunction(fn Value, args []Value) (rv Value, isCallable bool) {
 	switch fn := fn.(type) {
 	case *Builtin:
+		return fn.Call(ctx, args), true
+	case *Function:
 		return fn.Call(ctx, args), true
 	}
 	return nil, false

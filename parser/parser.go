@@ -50,6 +50,7 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.NIL:        p.literal,
 		lexer.BANG:       p.unary,
 		lexer.MINUS:      p.unary,
+		lexer.FN:         p.function,
 	}
 	// note: need to make sure that every entry in binaryParsers
 	// has a corresponding entry in precedences.
@@ -69,6 +70,7 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.SLASH:         p.binary,
 		lexer.DOT:           p.get,
 		lexer.MINUS_GREATER: p.get,
+		lexer.LEFT_PAREN:    p.call,
 	}
 	p.precedences = map[lexer.TokenType]int{
 		lexer.EQUAL:         PREC_ASSIGN,
@@ -86,6 +88,7 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.SLASH:         PREC_PRODUCT,
 		lexer.DOT:           PREC_CALL,
 		lexer.MINUS_GREATER: PREC_CALL,
+		lexer.LEFT_PAREN:    PREC_CALL,
 	}
 	return p
 }
@@ -152,7 +155,7 @@ func (p *Parser) Parse() *Module {
 // the main entry point is the declaration rule:
 //
 //   declaration → let | statement
-//   statement   → for | while | if | block | break | continue | exprStmt
+//   statement   → for | while | if | block | break | continue | return | exprStmt
 //   let      → "let" IDENT "=" expression ";"
 //   for      → "for" "(" IDENT ":" expr ")" statement
 //   while    → "while" "(" expr ")" statement
@@ -160,6 +163,7 @@ func (p *Parser) Parse() *Module {
 //   block    → "{" declaration* "}"
 //   break    → "break" ";"
 //   continue → "continue" ";"
+//   return   → "return" ( expr )? ";"
 //   exprStmt → expression ";"
 //
 // note: since most of the let,for,... are keywords in Go,
@@ -202,6 +206,8 @@ func (p *Parser) statement() Stmt {
 		return p.continueStmt()
 	case p.check(lexer.BREAK):
 		return p.breakStmt()
+	case p.check(lexer.RETURN):
+		return p.returnStmt()
 	}
 	return p.exprStmt()
 }
@@ -270,6 +276,16 @@ func (p *Parser) breakStmt() Stmt {
 	return newBreak(token)
 }
 
+func (p *Parser) returnStmt() Stmt {
+	token := p.consume()
+	expr := Expr(nil)
+	if !p.check(lexer.SEMICOLON) {
+		expr = p.expression()
+	}
+	p.expect(lexer.SEMICOLON, "expected ; after return")
+	return newReturn(token, expr)
+}
+
 func (p *Parser) exprStmt() Stmt {
 	expr := p.expression()
 	p.expect(lexer.SEMICOLON, "expected ; after expression statement")
@@ -282,13 +298,34 @@ func (p *Parser) exprStmt() Stmt {
 // ==================
 // expression parsing
 // ==================
+//
+// Ambiguity is resolved via a Pratt parser; below we give the rules,
+// from those with the least precedence to that with the most.
+//
+// expression → assign
+//            | and | or
+//            | binary
+//            | unary
+//            | call | get
+//            | literal
+// assign   → ( get | IDENTIFIER ) "=" expression
+// and      → expression "and" expression
+// or       → expression "or" expression
+// binary   → expression ( "==" | "!=" | "<=" | ">=" | "<" | ">" | "+" | "-" | "*" | "/" ) expression
+// unary    → ( "!" | "-" ) expression
+// get      → expression ( "." | "->" ) ( IDENTIFIER | "nil" | "true" | "false" )
+// call     → expression "(" args ")"
+// args     → expression ( "," args )? | ε
+// literal  → STRING | IDENTIFIER | NUMBER | TRUE | FALSE | NIL | func
+// function → "fn" "(" params ")" block
+// params   → IDENTIFIER ( "," params )? | ε
 
 // expression matches a single expression.
 func (p *Parser) expression() Expr { return p.precedence(PREC_LOWEST) }
 func (p *Parser) precedence(prec int) Expr {
 	unary, ok := p.unaryParsers[p.peek().Type]
 	if !ok {
-		panic(p.error(p.peek(), "not an expression: %s", p.previous().Type))
+		panic(p.error(p.peek(), "not an expression: %s", p.peek().Type))
 	}
 	expr := unary()
 	for !p.check(lexer.SEMICOLON) && prec < p.peekPrecedence() {
@@ -392,4 +429,34 @@ func (p *Parser) identifier() Expr {
 func (p *Parser) literal() Expr {
 	tok := p.consume()
 	return newLiteral(tok)
+}
+
+func (p *Parser) function() Expr {
+	tok := p.consume()
+	p.expect(lexer.LEFT_PAREN, "expected a ( after 'fn'")
+	params := []lexer.Token{}
+	// params
+	for !p.isAtEnd() && !p.check(lexer.RIGHT_PAREN) {
+		tok := p.expect(lexer.IDENTIFIER, "expected an identifier, got: %s", p.peek().Type)
+		params = append(params, tok)
+		if !p.match(lexer.COMMA) {
+			break
+		}
+	}
+	p.expect(lexer.RIGHT_PAREN, "unmatched (")
+	block := p.blockStmt().(*Block)
+	return newFunction(tok, params, block)
+}
+
+func (p *Parser) call(left Expr) Expr {
+	tok := p.consume()
+	args := []Expr{}
+	for !p.isAtEnd() && !p.check(lexer.RIGHT_PAREN) {
+		args = append(args, p.expression())
+		if !p.match(lexer.COMMA) {
+			break
+		}
+	}
+	p.expect(lexer.RIGHT_PAREN, "unmatched (")
+	return newCall(tok, left, args)
 }

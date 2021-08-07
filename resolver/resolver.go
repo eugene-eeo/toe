@@ -57,7 +57,6 @@ func New(module *parser.Module) *Resolver {
 	}
 	r.push() // the global scope.
 	scope := r.curr()
-	// scope["puts"] = true
 	scope["module"] = true
 	scope["Object"] = true
 	scope["Boolean"] = true
@@ -120,6 +119,8 @@ func (r *Resolver) resolve(node parser.Node) {
 		r.resolveBreak(node)
 	case *parser.Continue:
 		r.resolveContinue(node)
+	case *parser.Return:
+		r.resolveReturn(node)
 	// Expressions
 	case *parser.Binary:
 		r.resolveBinary(node)
@@ -135,11 +136,17 @@ func (r *Resolver) resolve(node parser.Node) {
 		r.resolveGet(node)
 	case *parser.Set:
 		r.resolveSet(node)
+	case *parser.Call:
+		r.resolveCall(node)
 	case *parser.Identifier:
 		r.resolveIdentifier(node)
 	case *parser.Literal:
 		// nothing to resolve.
 		return
+	case *parser.Function:
+		r.resolveFunction(node)
+	default:
+		panic(fmt.Sprintf("unhandled node: %#+v", node))
 	}
 }
 
@@ -211,6 +218,15 @@ func (r *Resolver) resolveContinue(node *parser.Continue) {
 	}
 }
 
+func (r *Resolver) resolveReturn(node *parser.Return) {
+	if r.ctrl&FUNC == 0 {
+		r.err(node.Token, "return outside of function")
+	}
+	if node.Expr != nil {
+		r.resolve(node.Expr)
+	}
+}
+
 // ===========
 // Expressions
 // ===========
@@ -232,7 +248,7 @@ func (r *Resolver) resolveOr(node *parser.Or) {
 
 func (r *Resolver) resolveAssign(node *parser.Assign) {
 	r.resolve(node.Right)
-	r.resolveLocal(node, node.Name)
+	r.annotate(node, node.Name)
 }
 
 func (r *Resolver) resolveUnary(node *parser.Unary) {
@@ -249,10 +265,33 @@ func (r *Resolver) resolveSet(node *parser.Set) {
 }
 
 func (r *Resolver) resolveIdentifier(node *parser.Identifier) {
-	r.resolveLocal(node, node.Token)
+	r.annotate(node, node.Token)
 }
 
-func (r *Resolver) resolveLocal(node parser.Expr, token lexer.Token) {
+func (r *Resolver) resolveFunction(node *parser.Function) {
+	// Function expressions -- we first push a new scope containing all
+	// of the parameters, and then we resolve the body.
+	ctrl := r.ctrl
+	r.ctrl |= FUNC
+	r.push()
+	scope := r.curr()
+	scope["this"] = true
+	for _, name := range node.Params {
+		scope[name.Lexeme] = true
+	}
+	r.resolveBlock(node.Body)
+	r.pop()
+	r.ctrl = ctrl
+}
+
+func (r *Resolver) resolveCall(node *parser.Call) {
+	for _, arg := range node.Args {
+		r.resolve(arg)
+	}
+	r.resolve(node.Fn)
+}
+
+func (r *Resolver) annotate(node parser.Expr, token lexer.Token) {
 	name := token.Lexeme
 	curr := len(r.scopes) - 1
 	// loop until we find a closest scope containing the name.
@@ -265,7 +304,7 @@ func (r *Resolver) resolveLocal(node parser.Expr, token lexer.Token) {
 			//  2. we didn't find the name in the current scope.
 			if !initialised {
 				if ((r.ctrl & FUNC) != 0) && i != curr {
-					r.Locs[node] = i
+					r.Locs[node] = curr - i
 					return
 				}
 				r.err(token, fmt.Sprintf("cannot access %q before initialization", name))

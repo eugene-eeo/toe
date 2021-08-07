@@ -1,42 +1,52 @@
 package resolver_test
 
 import (
+	"testing"
 	"toe/lexer"
 	"toe/parser"
 	"toe/resolver"
-	"testing"
 )
 
 func TestResolver(t *testing.T) {
+	// input := `
+	// let a = 1;
+	// let c = 2;
+	// let d = 3;
+	// {
+	// let b = 2;
+	// let c = 3;
+	// a = c;
+	// break;
+	// {
+	// 	let u = b + d;
+	// 	let u = 3;
+	// }
+	// let d = d;
+	// }
+	// e;
+	// let e = d + 1;
+	// continue;
+	// if (d <= e or e > d) {
+	// x;
+	// for (x : "abc") {
+	// 	if (x == "a")
+	// 		break;
+	// 	x = 1;
+	// 	continue;
+	// }
+	// } else {
+	// y;
+	// }
+	// fn(A,B,C) {
+	// A = A + B + C + this + a;
+	// };
+	// let isEven = fn(n) { return !isOdd(n); };
+	// let isOdd = fn(n) { return !isEven(n); };
+	// return 1;
+	// `
 	input := `
-let a = 1;
-let c = 2;
-let d = 3;
-{
-	let b = 2;
-	let c = 3;
-	a = c;
-	break;
-	{
-		let u = b + d;
-		let u = 3;
-	}
-	let d = d;
-}
-e;
-let e = d + 1;
-continue;
-if (d <= e or e > d) {
-	x;
-	for (x : "abc") {
-		if (x == "a")
-			break;
-		x = 1;
-		continue;
-	}
-} else {
-	y;
-}
+let f = fn(x) { f(x + 1); };
+f(1);
 `
 	fn := ""
 	l := lexer.New(fn, input)

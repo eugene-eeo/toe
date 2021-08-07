@@ -13,6 +13,7 @@ const (
 	EXPR_STMT
 	BREAK
 	CONTINUE
+	RETURN
 	BINARY
 	AND
 	OR
@@ -20,8 +21,10 @@ const (
 	UNARY
 	GET
 	SET
+	CALL
 	IDENTIFIER
 	LITERAL
+	FUNCTION
 )
 
 type Let struct {
@@ -100,6 +103,15 @@ func (node *Continue) Tok() lexer.Token { return node.Token }
 func (node *Continue) Type() NodeType   { return CONTINUE }
 func (node *Continue) stmt()            {}
 
+type Return struct {
+	Token lexer.Token
+	Expr  Expr
+}
+
+func (node *Return) Tok() lexer.Token { return node.Token }
+func (node *Return) Type() NodeType   { return RETURN }
+func (node *Return) stmt()            {}
+
 type Binary struct {
 	Token lexer.Token
 	Left  Expr
@@ -172,6 +184,16 @@ func (node *Set) Tok() lexer.Token { return node.Token }
 func (node *Set) Type() NodeType   { return SET }
 func (node *Set) expr()            {}
 
+type Call struct {
+	Token lexer.Token
+	Fn    Expr
+	Args  []Expr
+}
+
+func (node *Call) Tok() lexer.Token { return node.Token }
+func (node *Call) Type() NodeType   { return CALL }
+func (node *Call) expr()            {}
+
 type Identifier struct {
 	Token lexer.Token
 }
@@ -187,6 +209,16 @@ type Literal struct {
 func (node *Literal) Tok() lexer.Token { return node.Token }
 func (node *Literal) Type() NodeType   { return LITERAL }
 func (node *Literal) expr()            {}
+
+type Function struct {
+	Token  lexer.Token
+	Params []lexer.Token
+	Body   *Block
+}
+
+func (node *Function) Tok() lexer.Token { return node.Token }
+func (node *Function) Type() NodeType   { return FUNCTION }
+func (node *Function) expr()            {}
 
 func newLet(Token lexer.Token, Name lexer.Token, Value Expr) *Let {
 	return &Let{Token: Token, Name: Name, Value: Value}
@@ -214,6 +246,8 @@ func newBreak(Token lexer.Token) *Break { return &Break{Token: Token} }
 
 func newContinue(Token lexer.Token) *Continue { return &Continue{Token: Token} }
 
+func newReturn(Token lexer.Token, Expr Expr) *Return { return &Return{Token: Token, Expr: Expr} }
+
 func newBinary(Token lexer.Token, Left Expr, Right Expr) *Binary {
 	return &Binary{Token: Token, Left: Left, Right: Right}
 }
@@ -240,6 +274,14 @@ func newSet(Token lexer.Token, Object Expr, Name lexer.Token, Right Expr, Bound 
 	return &Set{Token: Token, Object: Object, Name: Name, Right: Right, Bound: Bound}
 }
 
+func newCall(Token lexer.Token, Fn Expr, Args []Expr) *Call {
+	return &Call{Token: Token, Fn: Fn, Args: Args}
+}
+
 func newIdentifier(Token lexer.Token) *Identifier { return &Identifier{Token: Token} }
 
 func newLiteral(Token lexer.Token) *Literal { return &Literal{Token: Token} }
+
+func newFunction(Token lexer.Token, Params []lexer.Token, Body *Block) *Function {
+	return &Function{Token: Token, Params: Params, Body: Body}
+}

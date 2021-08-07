@@ -11,6 +11,7 @@ func TestParserValid(t *testing.T) {
 		input    string
 		expected string
 	}{
+		{"", ""},
 		{"abcdef = 2;", "(abcdef = 2);"},
 		{"a + b + c;", "((a + b) + c);"},
 		{"a + b + (c = 7);", "((a + b) + (c = 7));"},
@@ -35,6 +36,15 @@ func TestParserValid(t *testing.T) {
 		{"a.b = true;", "(a.b = true);"},
 		{"x.true.u = 1;", "((x.true).u = 1);"},
 		{"a->b = true;", "(a->b = true);"},
+		{"fn(a) { true; };", "fn(a){true;};"},
+		{"fn(a,) { true; };", "fn(a){true;};"},
+		{"fn(a,b) { true; };", "fn(a, b){true;};"},
+		{"fn(a) { return 1; };", "fn(a){return 1;};"},
+		{"fn(a) { return; };", "fn(a){return;};"},
+		{"isEven(n);", "(isEven(n));"},
+		{"isEven(1,);", "(isEven(1));"},
+		{"isEven(1,2,3,4,5,);", "(isEven(1, 2, 3, 4, 5));"},
+		{"isEven.call(n)->this.that;", "((((isEven.call)(n))->this).that);"},
 	}
 	for i, test := range tests {
 		var tokens []lexer.Token
@@ -65,12 +75,17 @@ func TestParserInvalid(t *testing.T) {
 		input string
 		numErrs int
 	}{
-		// {"abcdef = 2", 1},
-		// {"if (x) { if (x) wtf! omg }", 2}, // panic mode should help here
-		// {"u + v + (x + 1; (x) then(); if (x) then()", 3},
-		// {"!!;", 1},
+		{"abcdef = 2", 1},
+		{"if (x) { if (x) wtf! omg }", 2}, // panic mode should help here
+		{"u + v + (x + 1; (x) then(); if (x) then()", 3},
+		{"!!;", 1},
+		{"=;", 1}, // this was known to make the parser panic
+		{";", 1},
 		{"1 = 2; x", 2}, // should continue parsing
-		// {"x.1;", 1},
+		{"x.1;", 1},
+		{"fn(x,,){}", 1},
+		{"fn(,){}", 1},
+		{"z(1,2,3,,);", 1},
 	}
 	for i, test := range tests {
 		var tokens []lexer.Token
@@ -80,9 +95,7 @@ func TestParserInvalid(t *testing.T) {
 		}
 		p := parser.New("", tokens)
 		p.Parse()
-		// if i == 2 {
-		// 	t.Logf("%+v\n", p.Errors)
-		// }
+		t.Logf("tests[%d]: %+v\n", i, p.Errors)
 		if len(p.Errors) != test.numErrs {
 			t.Errorf("tests[%d] (%q)", i, test.input)
 			t.Errorf("expected=%d errors, got=%d", test.numErrs, len(p.Errors))

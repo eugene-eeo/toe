@@ -5,6 +5,10 @@ package eval
 // field (for values controlling the runtime behaviour, such as Break
 // and Return we simply ignore their prototypes).
 
+import (
+	"toe/parser"
+)
+
 type ValueType uint8
 
 //go:generate stringer -type=ValueType
@@ -23,6 +27,7 @@ const (
 	ERROR
 	BREAK
 	CONTINUE
+	RETURN
 )
 
 type Value interface {
@@ -78,17 +83,59 @@ func (v *Builtin) Call(ctx *Context, args []Value) Value {
 	return v.fn(ctx, v.this, args)
 }
 
+type Function struct {
+	this    Value
+	closure *Environment
+	node    *parser.Function
+}
+
+func (v *Function) Type() ValueType { return FUNCTION }
+
+func (v *Function) Bind(this Value) *Function {
+	if v.this == nil {
+		return &Function{this, v.closure, v.node}
+	}
+	return v
+}
+
+func (v *Function) Call(ctx *Context, args []Value) Value {
+	// remember the current environment
+	old_env := ctx.Env
+	// create a new environment with bound parameters
+	ctx.Env = newEnvironment(v.closure)
+	this := v.this
+	if this == nil {
+		this = NIL
+	}
+	ctx.Env.Define("this", this)
+	for i, param := range v.node.Params {
+		value := Value(NIL)
+		if len(args) > i {
+			value = args[i]
+		}
+		ctx.Env.Define(param.Lexeme, value)
+	}
+	rv := ctx.Eval(v.node.Body)
+	// restore the old environment
+	ctx.Env = old_env
+	return rv
+}
+
 // ----------------------
 // Runtime Control Values
 // ----------------------
 
 // Error is a currently propagating error (exception).
-type Error struct{ reason Value }
+type Error struct{ Reason Value }
 
 // Break signals that a loop is being broken from.
 type Break struct{}
 type Continue struct{}
 
-func (e *Error) Type() ValueType { return ERROR }
-func (b *Break) Type() ValueType { return BREAK }
+// Return is a return-value -- needs to be unwrapped.
+type Return struct{ value Value }
+
+func (e *Error) Type() ValueType    { return ERROR }
+func (b *Break) Type() ValueType    { return BREAK }
 func (c *Continue) Type() ValueType { return CONTINUE }
+func (r *Return) Type() ValueType   { return RETURN }

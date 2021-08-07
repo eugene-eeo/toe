@@ -121,6 +121,7 @@ if __name__ == '__main__':
     stmt('EXPR_STMT', 'ExprStmt', fields=['Expr Expr'])
     stmt('BREAK', 'Break', fields=[])
     stmt('CONTINUE', 'Continue', fields=[])
+    stmt('RETURN', 'Return', fields=['Expr Expr'])
     # Expressions
     expr('BINARY', 'Binary', fields=['Left Expr', 'Right Expr'])
     expr('AND', 'And', fields=['Left Expr', 'Right Expr'])
@@ -129,7 +130,9 @@ if __name__ == '__main__':
     expr('UNARY', 'Unary', fields=['Right Expr'])
     expr('GET', 'Get', fields=['Object Expr', 'Name lexer.Token', 'Bound bool'])
     expr('SET', 'Set', fields=['Object Expr', 'Name lexer.Token', 'Right Expr', 'Bound bool'])
+    expr('CALL', 'Call', fields=['Fn Expr', 'Args []Expr'])
     expr('IDENTIFIER', 'Identifier', fields=[])
     expr('LITERAL', 'Literal', fields=[])
+    expr('FUNCTION', 'Function', fields=['Params []lexer.Token', 'Body *Block'])
     # autopep8: on
     generate()

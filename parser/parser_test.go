@@ -32,6 +32,8 @@ func TestParserValid(t *testing.T) {
 		{"true.x.y == 2.u;", "(((true.x).y) == (2.u));"},
 		{"true.x.y != 2.u.z or 2;", "((((true.x).y) != ((2.u).z)) or 2);"},
 		{"x.true.false.nil;", "(((x.true).false).nil);"},
+		{"a.b = true;", "(a.b = true);"},
+		{"x.true.u = 1;", "((x.true).u = 1);"},
 	}
 	for i, test := range tests {
 		var tokens []lexer.Token

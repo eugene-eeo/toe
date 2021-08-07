@@ -144,6 +144,20 @@ func (node *Get) String() string {
 	return buf.String()
 }
 
+func (node *Set) String() string {
+	var buf bytes.Buffer
+	buf.WriteString("(")
+	buf.WriteString(node.Object.String())
+	buf.WriteString(".")
+	buf.WriteString(node.Name.Lexeme)
+	buf.WriteString(" ")
+	buf.WriteString(node.Tok().Lexeme)
+	buf.WriteString(" ")
+	buf.WriteString(node.Right.String())
+	buf.WriteString(")")
+	return buf.String()
+}
+
 func (node *Unary) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("(")

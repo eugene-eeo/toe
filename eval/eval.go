@@ -116,12 +116,7 @@ func (ctx *Context) Eval(node parser.Node) Value {
 	case *parser.Get:
 		return ctx.evalGet(node)
 	case *parser.Identifier:
-		ident := node.Tok().Lexeme
-		rv, ok := ctx.Env.GetAt(ctx.locs[node], ident)
-		if !ok {
-			return &Error{&String{fmt.Sprintf("unknown identifier %s", ident)}}
-		}
-		return rv
+		return ctx.evalIdentifier(node)
 	// Literals
 	case *parser.Literal:
 		switch node.Tok().Type {
@@ -164,28 +159,33 @@ func (ctx *Context) evalUnary(node *parser.Unary) Value {
 	return ctx.evalUnaryValues(node.Tok().Type, right)
 }
 
+func (ctx *Context) evalIdentifier(node *parser.Identifier) Value {
+	ident := node.Tok().Lexeme
+	rv, ok := ctx.Env.GetAt(ctx.locs[node], ident)
+	if !ok {
+		return &Error{&String{fmt.Sprintf("unknown identifier %s", ident)}}
+	}
+	return rv
+}
+
 // ==========
 // Statements
 // ==========
 
-func (ctx *Context) evalIf(node *parser.If) Value {
-	cond := ctx.Eval(node.Cond)
-	if isError(cond) {
-		return cond
-	}
-	if isTruthy(cond) {
-		return ctx.Eval(node.Then)
-	} else {
-		if node.Else != nil {
-			return ctx.Eval(node.Else)
+func (ctx *Context) evalBlock(node *parser.Block) Value {
+	// Blocks evaluate to the return-value of the last statement in the block.
+	// Where we encounter continue / break, we will return that signal.
+	var rv Value = NIL
+	ctx.pushEnv()
+	defer ctx.popEnv()
+	for _, stmt := range node.Statements {
+		rv = ctx.Eval(stmt)
+		if isError(rv) || isBreak(rv) || isContinue(rv) {
+			return rv
 		}
-		return NIL
 	}
+	return rv
 }
-
-// ===================
-// Iterator evaluation
-// ===================
 
 func (ctx *Context) evalFor(node *parser.For) Value {
 	// In theory we would need a stack for iterators,
@@ -254,19 +254,19 @@ func (ctx *Context) evalWhile(node *parser.While) Value {
 	return NIL
 }
 
-func (ctx *Context) evalBlock(node *parser.Block) Value {
-	// Blocks evaluate to the return-value of the last statement in the block.
-	// Where we encounter continue / break, we will return that signal.
-	var rv Value = NIL
-	ctx.pushEnv()
-	defer ctx.popEnv()
-	for _, stmt := range node.Statements {
-		rv = ctx.Eval(stmt)
-		if isError(rv) || isBreak(rv) || isContinue(rv) {
-			return rv
-		}
+func (ctx *Context) evalIf(node *parser.If) Value {
+	cond := ctx.Eval(node.Cond)
+	if isError(cond) {
+		return cond
 	}
-	return rv
+	if isTruthy(cond) {
+		return ctx.Eval(node.Then)
+	} else {
+		if node.Else != nil {
+			return ctx.Eval(node.Else)
+		}
+		return NIL
+	}
 }
 
 // ====================

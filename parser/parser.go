@@ -318,6 +318,9 @@ func (p *Parser) assign(left Expr) Expr {
 	tok := p.consume()
 	right := p.precedence(PREC_ASSIGN-1)
 	switch left.Type() {
+	case GET:
+		get := left.(*Get)
+		return newSet(tok, get.Left, get.Right, right)
 	case IDENTIFIER:
 		return newAssign(tok, left.Tok(), right)
 	default:

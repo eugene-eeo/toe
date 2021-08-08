@@ -11,6 +11,14 @@ func TestResolver(t *testing.T) {
 	input := `
 let f = fn(x) { f(x + 1); return this.x; };
 f(1);
+let a = 1;
+{
+	let g = nil;
+	g.func_name = fn() {
+		return a;
+	};
+	let a = 2;
+}
 `
 	module := lexAndParse(t, input)
 	if module == nil {
@@ -21,13 +29,30 @@ f(1);
 	if !noErrors(t, "resolver", r.Errors) {
 		return
 	}
-	f_inside_func := module.Stmts[0].(*parser.Let).Value.(*parser.Function).Body.Stmts[0].(*parser.ExprStmt).Expr.(*parser.Call).Callee.(*parser.Identifier)
-	f_outside_func := module.Stmts[1].(*parser.ExprStmt).Expr.(*parser.Call).Callee.(*parser.Identifier)
-	if f_inside_func.Loc != 2 {
-		t.Errorf("expected f inside to be 2, got=%d", f_inside_func.Loc)
+	f_func := module.Stmts[0].(*parser.Let).Value.(*parser.Function)
+	g_set := module.Stmts[3].(*parser.Block).Stmts[1].(*parser.ExprStmt).Expr.(*parser.Set)
+	g_ident := g_set.Object.(*parser.Identifier)
+	g_func := g_set.Right.(*parser.Function)
+	f_inside_f := f_func.Body.Stmts[0].(*parser.ExprStmt).Expr.(*parser.Call).Callee.(*parser.Identifier)
+	f_call := module.Stmts[1].(*parser.ExprStmt).Expr.(*parser.Call).Callee.(*parser.Identifier)
+	a_inside_g := g_func.Body.Stmts[0].(*parser.Return).Expr.(*parser.Identifier)
+	if f_func.Name != "f" {
+		t.Errorf("expected f_func.Name='f', got=%q", f_func.Name)
 	}
-	if f_outside_func.Loc != 0 {
-		t.Errorf("expected f outside to be 0, got=%d", f_outside_func.Loc)
+	if f_inside_f.Loc != 2 {
+		t.Errorf("expected f inside f to be 2, got=%d", f_inside_f.Loc)
+	}
+	if f_call.Loc != 0 {
+		t.Errorf("expected f outside to be 0, got=%d", f_call.Loc)
+	}
+	if g_ident.Loc != 0 {
+		t.Errorf("expected g to be 0, got=%d", g_ident.Loc)
+	}
+	if g_func.Name != "func_name"  {
+		t.Errorf("expected g.func_name.Name=\"func_name\" got=%q", g_func.Name)
+	}
+	if a_inside_g.Loc != 3 {
+		t.Errorf("expected a inside g be 3, got=%d", a_inside_g.Loc)
 	}
 }
 

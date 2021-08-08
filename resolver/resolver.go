@@ -168,6 +168,7 @@ func (r *Resolver) resolveLet(node *parser.Let) {
 	curr[name] = false
 	r.resolve(node.Value)
 	curr[name] = true
+	addFunctionName(node.Value, name)
 }
 
 func (r *Resolver) resolveBlock(node *parser.Block) {
@@ -252,6 +253,7 @@ func (r *Resolver) resolveOr(node *parser.Or) {
 
 func (r *Resolver) resolveAssign(node *parser.Assign) {
 	r.resolve(node.Right)
+	addFunctionName(node.Right, node.Name.Lexeme)
 	r.lookup(node, node.Name)
 }
 
@@ -265,6 +267,7 @@ func (r *Resolver) resolveGet(node *parser.Get) {
 
 func (r *Resolver) resolveSet(node *parser.Set) {
 	r.resolve(node.Right)
+	addFunctionName(node.Right, node.Name.Lexeme)
 	r.resolve(node.Object)
 }
 
@@ -312,6 +315,7 @@ func (r *Resolver) lookup(node parser.Expr, token lexer.Token) {
 			// let a = a, then we can return an error -- unless:
 			//  1. we're in a function AND
 			//  2. we didn't find the name in the current scope.
+			// this is to allow functions to refer to themselves.
 			if !initialised && !((r.ctrl & FUNC) != 0 || i != curr) {
 				r.err(token, fmt.Sprintf("cannot access %q before initialization", name))
 				return
@@ -336,6 +340,16 @@ func (r *Resolver) lookup(node parser.Expr, token lexer.Token) {
 	}
 }
 
+// =========
+// Utilities
+// =========
+
 func addLocation(node parser.Expr, loc int) {
 	node.(parser.Resolvable).AddLocation(loc)
+}
+
+func addFunctionName(node parser.Expr, name string) {
+	if fn, ok := node.(*parser.Function); ok {
+		fn.Name = name
+	}
 }

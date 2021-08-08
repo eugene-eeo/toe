@@ -295,6 +295,7 @@ type Function struct {
 	Fn     lexer.Token
 	Params []lexer.Token
 	Body   *Block
+	Name   string
 }
 
 func newFunction(Fn lexer.Token, Params []lexer.Token, Body *Block) *Function {

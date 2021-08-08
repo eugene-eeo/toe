@@ -112,7 +112,11 @@ func (v *Function) Call(ctx *Context, args []Value) Value {
 	old_this := ctx.this
 	// create a new environment with bound parameters
 	ctx.Env = newEnvironment(v.closure.filename, v.closure)
-	ctx.pushFunc("function")
+	if v.node.Name == "" {
+		ctx.pushFunc("<function>")
+	} else {
+		ctx.pushFunc(fmt.Sprintf("<function %q>", v.node.Name))
+	}
 	this := v.this
 	if this == nil {
 		this = NIL

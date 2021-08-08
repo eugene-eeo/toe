@@ -5,14 +5,26 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"toe/eval"
 	"github.com/chzyer/readline"
 )
 
+var VERSION string
 var LOGO = `
-_|_ _  _
- |_(_)(/_
- `
+  __                 |
+ |  |_.-----.-----.  | toe language
+ |   _|  _  |  -__|  | version: $VERSION
+ |____|_____|_____|  |
+`
+
+func sliceVersion(v string) string {
+	m := 10
+	if len(v) < 10 {
+		m = len(v)
+	}
+	return v[0:m]
+}
 
 func reportErrors(errors []error) bool {
 	if len(errors) == 0 {
@@ -25,7 +37,7 @@ func reportErrors(errors []error) bool {
 }
 
 func main() {
-	fmt.Println(LOGO)
+	fmt.Println(strings.Replace(LOGO, "$VERSION", sliceVersion(VERSION), 1))
 	rl, err := readline.New("> ")
 	if err != nil {
 		panic(err)

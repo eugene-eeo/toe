@@ -50,16 +50,13 @@ func New(module *parser.Module) *Resolver {
 		ctrl:   0,
 	}
 	r.push() // the global scope.
-	scope := r.curr()
-	scope["module"] = true
-	scope["puts"] = true
-	scope["Object"] = true
-	scope["Boolean"] = true
-	scope["Number"] = true
-	scope["String"] = true
-	scope["Array"] = true
-	scope["Function"] = true
 	return r
+}
+
+func (r *Resolver) AddGlobals(globals []string) {
+	for _, x := range globals {
+		r.scopes[0][x] = true
+	}
 }
 
 func (r *Resolver) curr() Scope { return r.scopes[len(r.scopes)-1] }

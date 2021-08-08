@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"toe/eval"
+	"toe/eval2"
 	"github.com/chzyer/readline"
 )
 
@@ -44,7 +44,7 @@ func main() {
 	}
 	defer rl.Close()
 
-	ctx := eval.NewInteractiveContext()
+	ctx := eval2.NewInteractiveContext()
 	for {
 		line, err := rl.Readline()
 		if err != nil {
@@ -56,8 +56,8 @@ func main() {
 		} else {
 			if u == nil {
 				continue
-			} else if u.Type() == eval.ERROR {
-				fmt.Fprintln(os.Stderr, u.(*eval.Error).String())
+			} else if u.Type() == eval2.VT_ERROR {
+				fmt.Fprintln(os.Stderr, u.(*eval2.Error).String())
 			} else {
 				fmt.Println(ctx.Inspect(u))
 			}

@@ -223,14 +223,14 @@ func (p *Parser) letStmt() Stmt {
 }
 
 func (p *Parser) forStmt() Stmt {
-	p.consume()
+	forToken := p.consume()
 	p.expect(lexer.LEFT_PAREN, "expect '(' after 'for'")
 	ident := p.expect(lexer.IDENTIFIER, "expect an identifier after '('")
 	p.expect(lexer.COLON, "expect ':' after identifier")
 	iter := p.expression()
 	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
 	stmt := p.statement()
-	return newFor(ident, iter, stmt)
+	return newFor(forToken, ident, iter, stmt)
 }
 
 func (p *Parser) whileStmt() Stmt {

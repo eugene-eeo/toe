@@ -62,6 +62,11 @@ class Struct:
         )
 
 
+def token_method(field):
+    return {"method": "Tok() lexer.Token",
+            "body": f"return node.{field}"}
+
+
 def generate(*, stmts, exprs):
     seen = set()
     structs = []
@@ -106,7 +111,7 @@ if __name__ == '__main__':
             Struct('Module',   ['Filename string', 'Stmts []Stmt']),
             Struct('Let',      ['Name lexer.Token', 'Value Expr']),
             Struct('Block',    ['Stmts []Stmt']),
-            Struct('For',      ['Name lexer.Token', 'Iter Expr', 'Stmt Stmt']),
+            Struct('For',      ['Keyword lexer.Token', 'Name lexer.Token', 'Iter Expr', 'Stmt Stmt']),
             Struct('While',    ['Cond Expr', 'Stmt Stmt']),
             Struct('If',       ['Cond Expr', 'Then Stmt', 'Else Stmt']),
             Struct('ExprStmt', ['Expr Expr']),

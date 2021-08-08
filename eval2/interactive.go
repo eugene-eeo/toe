@@ -1,38 +1,50 @@
-package eval
+package eval2
 
 import (
+	"fmt"
 	"toe/lexer"
 	"toe/parser"
 	"toe/resolver"
 )
 
 type InteractiveContext struct {
-	ctx *Context
-	res *resolver.Resolver
+	Filename string
+	ctx      *Context
+	res      *resolver.Resolver
 }
 
 func NewInteractiveContext() *InteractiveContext {
-	module := &parser.Module{Filename: "<stdin>"}
+	fn := "<stdin>"
+	module := &parser.Module{Filename: fn}
 	res := resolver.New(module)
 	ctx := NewContext()
-	ctx.Env, _ = ctx.NewModuleEnv("<stdin>")
-	ctx.pushFunc("<module>")
-	return &InteractiveContext{
-		ctx, res,
+	ctx.module = module
+	ctx.pushEnv()
+	ctx.pushFunc("[Module]")
+	return &InteractiveContext{fn, ctx, res}
+}
+
+type Inspect interface { Inspect() string } 
+type Stringer interface { String() string } 
+
+func (ic *InteractiveContext) Inspect(v Value) string {
+	switch v := v.(type) {
+	case Inspect:
+		return v.Inspect()
+	case Stringer:
+		return v.String()
+	default:
+		panic(fmt.Sprintf("this is a bug -- encountered non-value type %#v", v))
 	}
 }
 
-func (ic *InteractiveContext) Inspect(v Value) string {
-	return ic.ctx.Inspect(v)
-}
-
 func (ic *InteractiveContext) Run(input string) (Value, []error) {
-	l := lexer.New("<stdin>", input)
+	l := lexer.New(ic.Filename, input)
 	l.ScanTokens()
 	if len(l.Errors) != 0 {
 		return nil, l.Errors
 	}
-	p := parser.New("<stdin>", l.Tokens)
+	p := parser.New(ic.Filename, l.Tokens)
 	module := p.Parse()
 	if len(p.Errors) != 0 {
 		return nil, p.Errors
@@ -48,7 +60,7 @@ func (ic *InteractiveContext) Run(input string) (Value, []error) {
 	rv := Value(nil)
 	// Still no errors? we can run it.
 	for _, stmt := range module.Stmts {
-		rv = ic.ctx.Eval(stmt)
+		rv = ic.ctx.EvalStmt(stmt)
 		if isError(rv) {
 			return rv, nil
 		}

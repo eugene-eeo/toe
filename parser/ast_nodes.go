@@ -44,16 +44,18 @@ func (node *Block) node() {}
 func (node *Block) stmt() {}
 
 type For struct {
-	Name lexer.Token
-	Iter Expr
-	Stmt Stmt
+	Keyword lexer.Token
+	Name    lexer.Token
+	Iter    Expr
+	Stmt    Stmt
 }
 
-func newFor(Name lexer.Token, Iter Expr, Stmt Stmt) *For {
+func newFor(Keyword lexer.Token, Name lexer.Token, Iter Expr, Stmt Stmt) *For {
 	return &For{
-		Name: Name,
-		Iter: Iter,
-		Stmt: Stmt,
+		Keyword: Keyword,
+		Name:    Name,
+		Iter:    Iter,
+		Stmt:    Stmt,
 	}
 }
 func (node *For) node() {}

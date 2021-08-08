@@ -3,300 +3,322 @@ package parser
 
 import "toe/lexer"
 
-const (
-	_ = NodeType(iota)
-	LET
-	BLOCK
-	FOR
-	WHILE
-	IF
-	EXPR_STMT
-	BREAK
-	CONTINUE
-	RETURN
-	BINARY
-	AND
-	OR
-	ASSIGN
-	UNARY
-	GET
-	SET
-	CALL
-	IDENTIFIER
-	LITERAL
-	FUNCTION
-	SUPER
-)
+type Module struct {
+	Filename string
+	Stmts    []Stmt
+}
+
+func newModule(Filename string, Stmts []Stmt) *Module {
+	return &Module{
+		Filename: Filename,
+		Stmts:    Stmts,
+	}
+}
+func (node *Module) node() {}
+func (node *Module) stmt() {}
 
 type Let struct {
-	Token lexer.Token
 	Name  lexer.Token
 	Value Expr
 }
 
-func (node *Let) Tok() lexer.Token { return node.Token }
-func (node *Let) Type() NodeType   { return LET }
-func (node *Let) stmt()            {}
+func newLet(Name lexer.Token, Value Expr) *Let {
+	return &Let{
+		Name:  Name,
+		Value: Value,
+	}
+}
+func (node *Let) node() {}
+func (node *Let) stmt() {}
 
 type Block struct {
-	Token      lexer.Token
-	Statements []Stmt
+	Stmts []Stmt
 }
 
-func (node *Block) Tok() lexer.Token { return node.Token }
-func (node *Block) Type() NodeType   { return BLOCK }
-func (node *Block) stmt()            {}
+func newBlock(Stmts []Stmt) *Block {
+	return &Block{
+		Stmts: Stmts,
+	}
+}
+func (node *Block) node() {}
+func (node *Block) stmt() {}
 
 type For struct {
-	Token lexer.Token
-	Name  Expr
-	Iter  Expr
-	Stmt  Stmt
+	Name lexer.Token
+	Iter Expr
+	Stmt Stmt
 }
 
-func (node *For) Tok() lexer.Token { return node.Token }
-func (node *For) Type() NodeType   { return FOR }
-func (node *For) stmt()            {}
+func newFor(Name lexer.Token, Iter Expr, Stmt Stmt) *For {
+	return &For{
+		Name: Name,
+		Iter: Iter,
+		Stmt: Stmt,
+	}
+}
+func (node *For) node() {}
+func (node *For) stmt() {}
 
 type While struct {
-	Token lexer.Token
-	Cond  Expr
-	Stmt  Stmt
+	Cond Expr
+	Stmt Stmt
 }
 
-func (node *While) Tok() lexer.Token { return node.Token }
-func (node *While) Type() NodeType   { return WHILE }
-func (node *While) stmt()            {}
+func newWhile(Cond Expr, Stmt Stmt) *While {
+	return &While{
+		Cond: Cond,
+		Stmt: Stmt,
+	}
+}
+func (node *While) node() {}
+func (node *While) stmt() {}
 
 type If struct {
-	Token lexer.Token
-	Cond  Expr
-	Then  Stmt
-	Else  Stmt
+	Cond Expr
+	Then Stmt
+	Else Stmt
 }
 
-func (node *If) Tok() lexer.Token { return node.Token }
-func (node *If) Type() NodeType   { return IF }
-func (node *If) stmt()            {}
+func newIf(Cond Expr, Then Stmt, Else Stmt) *If {
+	return &If{
+		Cond: Cond,
+		Then: Then,
+		Else: Else,
+	}
+}
+func (node *If) node() {}
+func (node *If) stmt() {}
 
 type ExprStmt struct {
-	Token lexer.Token
-	Expr  Expr
+	Expr Expr
 }
 
-func (node *ExprStmt) Tok() lexer.Token { return node.Token }
-func (node *ExprStmt) Type() NodeType   { return EXPR_STMT }
-func (node *ExprStmt) stmt()            {}
+func newExprStmt(Expr Expr) *ExprStmt {
+	return &ExprStmt{
+		Expr: Expr,
+	}
+}
+func (node *ExprStmt) node() {}
+func (node *ExprStmt) stmt() {}
 
 type Break struct {
-	Token lexer.Token
+	Keyword lexer.Token
 }
 
-func (node *Break) Tok() lexer.Token { return node.Token }
-func (node *Break) Type() NodeType   { return BREAK }
-func (node *Break) stmt()            {}
+func newBreak(Keyword lexer.Token) *Break {
+	return &Break{
+		Keyword: Keyword,
+	}
+}
+func (node *Break) node() {}
+func (node *Break) stmt() {}
 
 type Continue struct {
-	Token lexer.Token
+	Keyword lexer.Token
 }
 
-func (node *Continue) Tok() lexer.Token { return node.Token }
-func (node *Continue) Type() NodeType   { return CONTINUE }
-func (node *Continue) stmt()            {}
+func newContinue(Keyword lexer.Token) *Continue {
+	return &Continue{
+		Keyword: Keyword,
+	}
+}
+func (node *Continue) node() {}
+func (node *Continue) stmt() {}
 
 type Return struct {
-	Token lexer.Token
-	Expr  Expr
+	Keyword lexer.Token
+	Expr    Expr
 }
 
-func (node *Return) Tok() lexer.Token { return node.Token }
-func (node *Return) Type() NodeType   { return RETURN }
-func (node *Return) stmt()            {}
+func newReturn(Keyword lexer.Token, Expr Expr) *Return {
+	return &Return{
+		Keyword: Keyword,
+		Expr:    Expr,
+	}
+}
+func (node *Return) node() {}
+func (node *Return) stmt() {}
 
 type Binary struct {
-	Token lexer.Token
 	Left  Expr
+	Op    lexer.Token
 	Right Expr
 }
 
-func (node *Binary) Tok() lexer.Token { return node.Token }
-func (node *Binary) Type() NodeType   { return BINARY }
-func (node *Binary) expr()            {}
+func newBinary(Left Expr, Op lexer.Token, Right Expr) *Binary {
+	return &Binary{
+		Left:  Left,
+		Op:    Op,
+		Right: Right,
+	}
+}
+func (node *Binary) node() {}
+func (node *Binary) expr() {}
 
 type And struct {
-	Token lexer.Token
 	Left  Expr
+	Op    lexer.Token
 	Right Expr
 }
 
-func (node *And) Tok() lexer.Token { return node.Token }
-func (node *And) Type() NodeType   { return AND }
-func (node *And) expr()            {}
+func newAnd(Left Expr, Op lexer.Token, Right Expr) *And {
+	return &And{
+		Left:  Left,
+		Op:    Op,
+		Right: Right,
+	}
+}
+func (node *And) node() {}
+func (node *And) expr() {}
 
 type Or struct {
-	Token lexer.Token
 	Left  Expr
+	Op    lexer.Token
 	Right Expr
 }
 
-func (node *Or) Tok() lexer.Token { return node.Token }
-func (node *Or) Type() NodeType   { return OR }
-func (node *Or) expr()            {}
+func newOr(Left Expr, Op lexer.Token, Right Expr) *Or {
+	return &Or{
+		Left:  Left,
+		Op:    Op,
+		Right: Right,
+	}
+}
+func (node *Or) node() {}
+func (node *Or) expr() {}
 
 type Assign struct {
-	Token lexer.Token
 	Name  lexer.Token
 	Right Expr
+	Loc   int
 }
 
-func (node *Assign) Tok() lexer.Token { return node.Token }
-func (node *Assign) Type() NodeType   { return ASSIGN }
-func (node *Assign) expr()            {}
+func newAssign(Name lexer.Token, Right Expr) *Assign {
+	return &Assign{
+		Name:  Name,
+		Right: Right,
+	}
+}
+func (node *Assign) node() {}
+func (node *Assign) expr() {}
 
 type Unary struct {
-	Token lexer.Token
+	Op    lexer.Token
 	Right Expr
 }
 
-func (node *Unary) Tok() lexer.Token { return node.Token }
-func (node *Unary) Type() NodeType   { return UNARY }
-func (node *Unary) expr()            {}
+func newUnary(Op lexer.Token, Right Expr) *Unary {
+	return &Unary{
+		Op:    Op,
+		Right: Right,
+	}
+}
+func (node *Unary) node() {}
+func (node *Unary) expr() {}
 
 type Get struct {
-	Token  lexer.Token
 	Object Expr
 	Name   lexer.Token
 	Bound  bool
 }
 
-func (node *Get) Tok() lexer.Token { return node.Token }
-func (node *Get) Type() NodeType   { return GET }
-func (node *Get) expr()            {}
+func newGet(Object Expr, Name lexer.Token, Bound bool) *Get {
+	return &Get{
+		Object: Object,
+		Name:   Name,
+		Bound:  Bound,
+	}
+}
+func (node *Get) node() {}
+func (node *Get) expr() {}
 
 type Set struct {
-	Token  lexer.Token
 	Object Expr
 	Name   lexer.Token
-	Right  Expr
 	Bound  bool
+	Right  Expr
 }
 
-func (node *Set) Tok() lexer.Token { return node.Token }
-func (node *Set) Type() NodeType   { return SET }
-func (node *Set) expr()            {}
+func newSet(Object Expr, Name lexer.Token, Bound bool, Right Expr) *Set {
+	return &Set{
+		Object: Object,
+		Name:   Name,
+		Bound:  Bound,
+		Right:  Right,
+	}
+}
+func (node *Set) node() {}
+func (node *Set) expr() {}
 
 type Call struct {
-	Token lexer.Token
-	Fn    Expr
-	Args  []Expr
+	Callee Expr
+	LParen lexer.Token
+	Args   []Expr
 }
 
-func (node *Call) Tok() lexer.Token { return node.Token }
-func (node *Call) Type() NodeType   { return CALL }
-func (node *Call) expr()            {}
+func newCall(Callee Expr, LParen lexer.Token, Args []Expr) *Call {
+	return &Call{
+		Callee: Callee,
+		LParen: LParen,
+		Args:   Args,
+	}
+}
+func (node *Call) node() {}
+func (node *Call) expr() {}
 
 type Identifier struct {
-	Token lexer.Token
+	Id  lexer.Token
+	Loc int
 }
 
-func (node *Identifier) Tok() lexer.Token { return node.Token }
-func (node *Identifier) Type() NodeType   { return IDENTIFIER }
-func (node *Identifier) expr()            {}
+func newIdentifier(Id lexer.Token) *Identifier {
+	return &Identifier{
+		Id: Id,
+	}
+}
+func (node *Identifier) node() {}
+func (node *Identifier) expr() {}
 
 type Literal struct {
-	Token lexer.Token
+	Lit lexer.Token
 }
 
-func (node *Literal) Tok() lexer.Token { return node.Token }
-func (node *Literal) Type() NodeType   { return LITERAL }
-func (node *Literal) expr()            {}
+func newLiteral(Lit lexer.Token) *Literal {
+	return &Literal{
+		Lit: Lit,
+	}
+}
+func (node *Literal) node() {}
+func (node *Literal) expr() {}
 
 type Function struct {
-	Token  lexer.Token
+	Fn     lexer.Token
 	Params []lexer.Token
 	Body   *Block
 }
 
-func (node *Function) Tok() lexer.Token { return node.Token }
-func (node *Function) Type() NodeType   { return FUNCTION }
-func (node *Function) expr()            {}
+func newFunction(Fn lexer.Token, Params []lexer.Token, Body *Block) *Function {
+	return &Function{
+		Fn:     Fn,
+		Params: Params,
+		Body:   Body,
+	}
+}
+func (node *Function) node() {}
+func (node *Function) expr() {}
 
 type Super struct {
-	Token lexer.Token
+	Tok   lexer.Token
 	Name  lexer.Token
 	Bound bool
 }
 
-func (node *Super) Tok() lexer.Token { return node.Token }
-func (node *Super) Type() NodeType   { return SUPER }
-func (node *Super) expr()            {}
-
-func newLet(Token lexer.Token, Name lexer.Token, Value Expr) *Let {
-	return &Let{Token: Token, Name: Name, Value: Value}
+func newSuper(Tok lexer.Token, Name lexer.Token, Bound bool) *Super {
+	return &Super{
+		Tok:   Tok,
+		Name:  Name,
+		Bound: Bound,
+	}
 }
-
-func newBlock(Token lexer.Token, Statements []Stmt) *Block {
-	return &Block{Token: Token, Statements: Statements}
-}
-
-func newFor(Token lexer.Token, Name Expr, Iter Expr, Stmt Stmt) *For {
-	return &For{Token: Token, Name: Name, Iter: Iter, Stmt: Stmt}
-}
-
-func newWhile(Token lexer.Token, Cond Expr, Stmt Stmt) *While {
-	return &While{Token: Token, Cond: Cond, Stmt: Stmt}
-}
-
-func newIf(Token lexer.Token, Cond Expr, Then Stmt, Else Stmt) *If {
-	return &If{Token: Token, Cond: Cond, Then: Then, Else: Else}
-}
-
-func newExprStmt(Token lexer.Token, Expr Expr) *ExprStmt { return &ExprStmt{Token: Token, Expr: Expr} }
-
-func newBreak(Token lexer.Token) *Break { return &Break{Token: Token} }
-
-func newContinue(Token lexer.Token) *Continue { return &Continue{Token: Token} }
-
-func newReturn(Token lexer.Token, Expr Expr) *Return { return &Return{Token: Token, Expr: Expr} }
-
-func newBinary(Token lexer.Token, Left Expr, Right Expr) *Binary {
-	return &Binary{Token: Token, Left: Left, Right: Right}
-}
-
-func newAnd(Token lexer.Token, Left Expr, Right Expr) *And {
-	return &And{Token: Token, Left: Left, Right: Right}
-}
-
-func newOr(Token lexer.Token, Left Expr, Right Expr) *Or {
-	return &Or{Token: Token, Left: Left, Right: Right}
-}
-
-func newAssign(Token lexer.Token, Name lexer.Token, Right Expr) *Assign {
-	return &Assign{Token: Token, Name: Name, Right: Right}
-}
-
-func newUnary(Token lexer.Token, Right Expr) *Unary { return &Unary{Token: Token, Right: Right} }
-
-func newGet(Token lexer.Token, Object Expr, Name lexer.Token, Bound bool) *Get {
-	return &Get{Token: Token, Object: Object, Name: Name, Bound: Bound}
-}
-
-func newSet(Token lexer.Token, Object Expr, Name lexer.Token, Right Expr, Bound bool) *Set {
-	return &Set{Token: Token, Object: Object, Name: Name, Right: Right, Bound: Bound}
-}
-
-func newCall(Token lexer.Token, Fn Expr, Args []Expr) *Call {
-	return &Call{Token: Token, Fn: Fn, Args: Args}
-}
-
-func newIdentifier(Token lexer.Token) *Identifier { return &Identifier{Token: Token} }
-
-func newLiteral(Token lexer.Token) *Literal { return &Literal{Token: Token} }
-
-func newFunction(Token lexer.Token, Params []lexer.Token, Body *Block) *Function {
-	return &Function{Token: Token, Params: Params, Body: Body}
-}
-
-func newSuper(Token lexer.Token, Name lexer.Token, Bound bool) *Super {
-	return &Super{Token: Token, Name: Name, Bound: Bound}
-}
+func (node *Super) node() {}
+func (node *Super) expr() {}

@@ -14,7 +14,7 @@ type InteractiveContext struct {
 func NewInteractiveContext() *InteractiveContext {
 	module := &parser.Module{Filename: "<stdin>"}
 	res := resolver.New(module)
-	ctx := NewContext(res.Locs)
+	ctx := NewContext()
 	ctx.Env, _ = ctx.NewModuleEnv("<stdin>")
 	ctx.pushFunc("<module>")
 	return &InteractiveContext{

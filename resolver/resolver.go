@@ -1,13 +1,18 @@
 // Package resolver implements identifer resolution semantic analysis,
 // as well as some syntax checks (e.g. ensuring that continues and breaks
-// are within a loop construct).
+// are within a loop construct). Identifier resolution works by recording
+// the distance from the current environment where an identifier can be
+// found.
 package resolver
 
 import (
 	"fmt"
+	"errors"
 	"toe/lexer"
 	"toe/parser"
 )
+
+var TooManyErrors = errors.New("too many errors")
 
 type ResolverError struct {
 	Filename string
@@ -22,29 +27,19 @@ func (re ResolverError) String() string {
 
 type Scope map[string]bool
 
-// Locations is a map of _resolvable_ expressions to locations:
-// i.e. how far the value of a variable can be found from its _current_
-// environment. For instance:
-// let a = 1;
-// let b = -a; <-- this `a' will have distance 0.
-// {
-//     let c = a + 2; <-- this `a' will have distance 1.
-// }
-type Locations map[parser.Expr]int
-
+// Control flags -- whether we are in a loop, or a function.
 const (
 	LOOP = 1 << iota
 	FUNC
 )
 
 type Resolver struct {
+	module *parser.Module
 	// each scope is a map from varname to a boolean, corresponding
 	// to whether the variable was already initialised.
-	module *parser.Module
 	scopes []Scope
 	Errors []error
-	Locs   map[parser.Expr]int
-	ctrl   uint8 // control block -- whether we're in a loop / function
+	ctrl   uint8
 }
 
 func New(module *parser.Module) *Resolver {
@@ -52,7 +47,6 @@ func New(module *parser.Module) *Resolver {
 		module: module,
 		scopes: []Scope{},
 		Errors: []error{},
-		Locs:   map[parser.Expr]int{},
 		ctrl:   0,
 	}
 	r.push() // the global scope.
@@ -80,10 +74,11 @@ func (r *Resolver) err(tok lexer.Token, msg string) {
 	})
 }
 
-// Cleanup is used to clean up the resolver.
-// This is mostly useful for non-interactive usage.
+// Clean up frees memory used by the resolver -- this can only be done
+// after reporting errors, as it clears the errors as well.
 func (r *Resolver) Cleanup() {
-	r.scopes = nil
+	r.scopes = nil;
+	r.Errors = nil;
 }
 
 // ResolveOne resolves the given node -- it is mainly for
@@ -93,9 +88,14 @@ func (r *Resolver) ResolveOne(node parser.Node) {
 }
 
 // Resolve resolves the given module.
+// This method can only be called once.
 func (r *Resolver) Resolve() {
 	for _, stmt := range r.module.Stmts {
 		r.resolve(stmt)
+		if len(r.Errors) >= 10 {
+			r.Errors = append(r.Errors, TooManyErrors)
+			break
+		}
 	}
 	if len(r.scopes) != 1 || r.ctrl != 0 {
 		panic("something gone wrong!")
@@ -163,7 +163,7 @@ func (r *Resolver) resolveLet(node *parser.Let) {
 	curr := r.curr()
 	if _, ok := curr[name]; ok {
 		// is there already an existing let?
-		r.err(node.Tok(), "already a variable with this name in scope.")
+		r.err(node.Name, "already a variable with this name in scope.")
 	}
 	curr[name] = false
 	r.resolve(node.Value)
@@ -172,14 +172,14 @@ func (r *Resolver) resolveLet(node *parser.Let) {
 
 func (r *Resolver) resolveBlock(node *parser.Block) {
 	r.push()
-	for _, x := range node.Statements {
+	for _, x := range node.Stmts {
 		r.resolve(x)
 	}
 	r.pop()
 }
 
 func (r *Resolver) resolveFor(node *parser.For) {
-	name := node.Name.Tok().Lexeme
+	name := node.Name.Lexeme
 	r.resolve(node.Iter)
 	r.push()
 	ctrl := r.ctrl
@@ -212,19 +212,19 @@ func (r *Resolver) resolveExprStmt(node *parser.ExprStmt) {
 
 func (r *Resolver) resolveBreak(node *parser.Break) {
 	if r.ctrl&LOOP == 0 {
-		r.err(node.Token, "break outside of loop")
+		r.err(node.Keyword, "break outside of loop")
 	}
 }
 
 func (r *Resolver) resolveContinue(node *parser.Continue) {
 	if r.ctrl&LOOP == 0 {
-		r.err(node.Token, "continue outside of loop")
+		r.err(node.Keyword, "continue outside of loop")
 	}
 }
 
 func (r *Resolver) resolveReturn(node *parser.Return) {
 	if r.ctrl&FUNC == 0 {
-		r.err(node.Token, "return outside of function")
+		r.err(node.Keyword, "return outside of function")
 	}
 	if node.Expr != nil {
 		r.resolve(node.Expr)
@@ -252,7 +252,7 @@ func (r *Resolver) resolveOr(node *parser.Or) {
 
 func (r *Resolver) resolveAssign(node *parser.Assign) {
 	r.resolve(node.Right)
-	r.annotate(node, node.Name)
+	r.lookup(node, node.Name)
 }
 
 func (r *Resolver) resolveUnary(node *parser.Unary) {
@@ -269,14 +269,14 @@ func (r *Resolver) resolveSet(node *parser.Set) {
 }
 
 func (r *Resolver) resolveCall(node *parser.Call) {
-	r.resolve(node.Fn)
+	r.resolve(node.Callee)
 	for _, arg := range node.Args {
 		r.resolve(arg)
 	}
 }
 
 func (r *Resolver) resolveIdentifier(node *parser.Identifier) {
-	r.annotate(node, node.Token)
+	r.lookup(node, node.Id)
 }
 
 func (r *Resolver) resolveFunction(node *parser.Function) {
@@ -297,11 +297,11 @@ func (r *Resolver) resolveFunction(node *parser.Function) {
 
 func (r *Resolver) resolveSuper(node *parser.Super) {
 	if r.ctrl&FUNC == 0 {
-		r.err(node.Token, "super outside of function")
+		r.err(node.Tok, "super outside of function")
 	}
 }
 
-func (r *Resolver) annotate(node parser.Expr, token lexer.Token) {
+func (r *Resolver) lookup(node parser.Expr, token lexer.Token) {
 	name := token.Lexeme
 	curr := len(r.scopes) - 1
 	// loop until we find a closest scope containing the name.
@@ -312,21 +312,17 @@ func (r *Resolver) annotate(node parser.Expr, token lexer.Token) {
 			// let a = a, then we can return an error -- unless:
 			//  1. we're in a function AND
 			//  2. we didn't find the name in the current scope.
-			if !initialised {
-				if ((r.ctrl & FUNC) != 0) && i != curr {
-					r.Locs[node] = curr - i
-					return
-				}
+			if !initialised && !((r.ctrl & FUNC) != 0 || i != curr) {
 				r.err(token, fmt.Sprintf("cannot access %q before initialization", name))
 				return
 			}
-			r.Locs[node] = curr - i
+			addLocation(node, curr - i)
 			return
 		}
 	}
 	if (r.ctrl & FUNC) != 0 {
-		// if we're in a function, then we find variables
-		// in the global scope -- this allows things like:
+		// if we're in a function, then we find variables in the global scope.
+		// this allows things like:
 		//
 		//      let x = fn(b) {
 		//         return a + b;  // <-- `a' is found outside.
@@ -334,9 +330,12 @@ func (r *Resolver) annotate(node parser.Expr, token lexer.Token) {
 		//      let a = 1;
 		//      x(2);
 		//
-		r.Locs[node] = curr
+		addLocation(node, curr)
 	} else {
-		// otherwise, this is an error.
 		r.err(token, fmt.Sprintf("undefined variable %q", name))
 	}
+}
+
+func addLocation(node parser.Expr, loc int) {
+	node.(parser.Resolvable).AddLocation(loc)
 }

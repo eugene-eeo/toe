@@ -8,72 +8,53 @@ import (
 )
 
 func TestResolver(t *testing.T) {
-	// input := `
-	// let a = 1;
-	// let c = 2;
-	// let d = 3;
-	// {
-	// let b = 2;
-	// let c = 3;
-	// a = c;
-	// break;
-	// {
-	// 	let u = b + d;
-	// 	let u = 3;
-	// }
-	// let d = d;
-	// }
-	// e;
-	// let e = d + 1;
-	// continue;
-	// if (d <= e or e > d) {
-	// x;
-	// for (x : "abc") {
-	// 	if (x == "a")
-	// 		break;
-	// 	x = 1;
-	// 	continue;
-	// }
-	// } else {
-	// y;
-	// }
-	// fn(A,B,C) {
-	// A = A + B + C + this + a;
-	// };
-	// let isEven = fn(n) { return !isOdd(n); };
-	// let isOdd = fn(n) { return !isEven(n); };
-	// return 1;
-	// `
 	input := `
-let f = fn(x) { f(x + 1); };
+let f = fn(x) { f(x + 1); return this.x; };
 f(1);
 `
-	fn := ""
-	l := lexer.New(fn, input)
-	l.ScanTokens()
-	if len(l.Errors) != 0 {
-		t.Error("got lexing errors:")
-		for _, x := range l.Errors {
-			t.Errorf("%s\n", x)
-		}
-		return
-	}
-	p := parser.New(fn, l.Tokens)
-	module := p.Parse()
-	if len(p.Errors) != 0 {
-		t.Error("got parsing errors:")
-		for _, x := range p.Errors {
-			t.Errorf("%s\n", x)
-		}
+	module := lexAndParse(t, input)
+	if module == nil {
 		return
 	}
 	r := resolver.New(module)
 	r.Resolve()
-	t.Log("--------")
-	t.Log("resolution errors:")
-	for _, x := range r.Errors {
-		t.Logf("%s\n", x)
+	if !noErrors(t, "resolver", r.Errors) {
+		return
 	}
-	t.Log("--------")
-	t.Log(r.Locs)
+	f_inside_func := module.Stmts[0].(*parser.Let).Value.(*parser.Function).Body.Stmts[0].(*parser.ExprStmt).Expr.(*parser.Call).Callee.(*parser.Identifier)
+	f_outside_func := module.Stmts[1].(*parser.ExprStmt).Expr.(*parser.Call).Callee.(*parser.Identifier)
+	if f_inside_func.Loc != 2 {
+		t.Errorf("expected f inside to be 2, got=%d", f_inside_func.Loc)
+	}
+	if f_outside_func.Loc != 0 {
+		t.Errorf("expected f outside to be 0, got=%d", f_outside_func.Loc)
+	}
+}
+
+// utils
+
+func lexAndParse(t *testing.T, input string) *parser.Module {
+	fn := ""
+	l := lexer.New(fn, input)
+	l.ScanTokens()
+	if !noErrors(t, "lexer", l.Errors) {
+		return nil
+	}
+	p := parser.New(fn, l.Tokens)
+	module := p.Parse()
+	if !noErrors(t, "parser", p.Errors) {
+		return nil
+	}
+	return module
+}
+
+func noErrors(t *testing.T, src string, errors []error) bool {
+	if len(errors) != 0 {
+		t.Errorf("got %s errors:\n", src)
+		for _, x := range errors {
+			t.Errorf("%s\n", x)
+		}
+		return false
+	}
+	return true
 }

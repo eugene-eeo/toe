@@ -26,16 +26,14 @@ type globals struct {
 }
 
 type Context struct {
-	Env     *Environment        // current executing environment.
-	locs    map[parser.Expr]int // map of resolvable expressions to distance.
-	funcs   []string            // list of function calls we're currently executing, for error tracing.
-	this    Value               // `this' of the currently executing function, if any.
-	globals *globals            // 'global' values
+	Env     *Environment // current executing environment.
+	funcs   []string     // list of function calls we're currently executing, for error tracing.
+	this    Value        // `this' of the currently executing function, if any.
+	globals *globals     // 'global' values
 }
 
-func NewContext(locs map[parser.Expr]int) *Context {
+func NewContext() *Context {
 	ctx := &Context{
-		locs:    locs,
 		funcs:   []string{},
 		globals: &globals{},
 	}
@@ -146,7 +144,7 @@ func (ctx *Context) Eval(node parser.Node) Value {
 		if isError(value) {
 			return value
 		}
-		ctx.Env.Ancestor(ctx.locs[node]).Define(name, value)
+		ctx.Env.Ancestor(node.Loc).Define(name, value)
 		return value
 	case *parser.Unary:
 		return ctx.evalUnary(node)
@@ -164,11 +162,11 @@ func (ctx *Context) Eval(node parser.Node) Value {
 		return ctx.evalSuper(node)
 	// Literals
 	case *parser.Literal:
-		switch node.Tok().Type {
+		switch node.Lit.Type {
 		case lexer.NUMBER:
-			return Number(node.Token.Literal.(float64))
+			return Number(node.Lit.Literal.(float64))
 		case lexer.STRING:
-			return String(node.Token.Literal.(string))
+			return String(node.Lit.Literal.(string))
 		case lexer.NIL:
 			return NIL
 		case lexer.TRUE:
@@ -189,7 +187,7 @@ func (ctx *Context) evalBlock(node *parser.Block) Value {
 	// Where we encounter continue / break, we will return that signal.
 	ctx.pushEnv()
 	defer ctx.popEnv()
-	for _, stmt := range node.Statements {
+	for _, stmt := range node.Stmts {
 		rv := ctx.Eval(stmt)
 		if isError(rv) || isBreak(rv) || isContinue(rv) || isReturn(rv) {
 			return rv
@@ -211,7 +209,7 @@ func (ctx *Context) evalFor(node *parser.For) Value {
 		return ctx.err(String(fmt.Sprintf("not iterable")))
 	}
 	loopRv := Value(NIL)
-	loopVar := node.Name.Tok().Lexeme
+	loopVar := node.Name.Lexeme
 	ctx.pushEnv()
 	defer ctx.popEnv()
 	for {
@@ -302,9 +300,9 @@ func (ctx *Context) evalBinary(node *parser.Binary) Value {
 	if isError(right) {
 		return right
 	}
-	rv := ctx.evalBinaryValues(node.Token.Type, left, right)
+	rv := ctx.evalBinaryValues(node.Op.Type, left, right)
 	if isError(rv) {
-		rv.(*Error).addContext(node.Token)
+		rv.(*Error).addContext(node.Op)
 	}
 	return rv
 }
@@ -330,9 +328,9 @@ func (ctx *Context) evalUnary(node *parser.Unary) Value {
 	if isError(right) {
 		return right
 	}
-	rv := ctx.evalUnaryValues(node.Tok().Type, right)
+	rv := ctx.evalUnaryValues(node.Op.Type, right)
 	if isError(rv) {
-		rv.(*Error).addContext(node.Token)
+		rv.(*Error).addContext(node.Op)
 	}
 	return rv
 }
@@ -346,7 +344,7 @@ func (ctx *Context) evalGet(node *parser.Get) Value {
 	v, ok := ctx.getAttr(object, attr)
 	if !ok {
 		e := ctx.err(String(fmt.Sprintf("attribute not found: %q", attr)))
-		e.addContext(node.Token)
+		e.addContext(node.Name)
 		return e
 	}
 	if node.Bound {
@@ -368,7 +366,7 @@ func (ctx *Context) evalSet(node *parser.Set) Value {
 	rv, ok := ctx.setAttr(object, attr, value)
 	if !ok {
 		e := ctx.err(String(fmt.Sprintf("cannot set attribute %q", attr)))
-		e.addContext(node.Token)
+		e.addContext(node.Name)
 		return e
 	}
 	if node.Bound {
@@ -378,7 +376,7 @@ func (ctx *Context) evalSet(node *parser.Set) Value {
 }
 
 func (ctx *Context) evalCall(node *parser.Call) Value {
-	fn := ctx.Eval(node.Fn)
+	fn := ctx.Eval(node.Callee)
 	if isError(fn) {
 		return fn
 	}
@@ -392,7 +390,7 @@ func (ctx *Context) evalCall(node *parser.Call) Value {
 	rv, ok := ctx.callFunction(fn, args)
 	if !ok {
 		e := ctx.err(String(fmt.Sprintf("not a function")))
-		e.addContext(node.Token)
+		e.addContext(node.LParen)
 		return e
 	}
 	// unwrap
@@ -400,17 +398,17 @@ func (ctx *Context) evalCall(node *parser.Call) Value {
 		rv = rv.(*Return).value
 	}
 	if isError(rv) {
-		rv.(*Error).addContext(node.Token)
+		rv.(*Error).addContext(node.LParen)
 	}
 	return rv
 }
 
 func (ctx *Context) evalIdentifier(node *parser.Identifier) Value {
-	ident := node.Tok().Lexeme
-	rv, ok := ctx.Env.GetAt(ctx.locs[node], ident)
+	ident := node.Id.Lexeme
+	rv, ok := ctx.Env.GetAt(node.Loc, ident)
 	if !ok {
 		e := ctx.err(String(fmt.Sprintf("unknown identifier %s", ident)))
-		e.addContext(node.Token)
+		e.addContext(node.Id)
 		return e
 	}
 	return rv

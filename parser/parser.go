@@ -214,36 +214,36 @@ func (p *Parser) statement() Stmt {
 }
 
 func (p *Parser) letStmt() Stmt {
-	token := p.consume()
+	p.consume()
 	ident := p.expect(lexer.IDENTIFIER, "expect an identifier")
 	p.expect(lexer.EQUAL, "expect '=' after identifier")
 	expr := p.expression()
 	p.expect(lexer.SEMICOLON, "expect ';' after variable declaration")
-	return newLet(token, ident, expr)
+	return newLet(ident, expr)
 }
 
 func (p *Parser) forStmt() Stmt {
-	token := p.consume()
+	p.consume()
 	p.expect(lexer.LEFT_PAREN, "expect '(' after 'for'")
 	ident := p.expect(lexer.IDENTIFIER, "expect an identifier after '('")
 	p.expect(lexer.COLON, "expect ':' after identifier")
 	iter := p.expression()
 	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
 	stmt := p.statement()
-	return newFor(token, newIdentifier(ident), iter, stmt)
+	return newFor(ident, iter, stmt)
 }
 
 func (p *Parser) whileStmt() Stmt {
-	token := p.consume()
+	p.consume()
 	p.expect(lexer.LEFT_PAREN, "expect '(' after 'while'")
 	cond := p.expression()
 	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
 	stmt := p.statement()
-	return newWhile(token, cond, stmt)
+	return newWhile(cond, stmt)
 }
 
 func (p *Parser) ifStmt() Stmt {
-	token := p.consume()
+	p.consume()
 	p.expect(lexer.LEFT_PAREN, "expect '(' after 'if'")
 	cond := p.expression()
 	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
@@ -252,17 +252,17 @@ func (p *Parser) ifStmt() Stmt {
 	if p.match(lexer.ELSE) {
 		elseStmt = p.statement()
 	}
-	return newIf(token, cond, then, elseStmt)
+	return newIf(cond, then, elseStmt)
 }
 
 func (p *Parser) blockStmt() Stmt {
-	token := p.consume()
+	p.consume()
 	stmts := []Stmt{}
 	for !p.isAtEnd() && !p.check(lexer.RIGHT_BRACE) {
 		stmts = append(stmts, p.declaration())
 	}
 	p.expect(lexer.RIGHT_BRACE, "unclosed '{'")
-	return newBlock(token, stmts)
+	return newBlock(stmts)
 }
 
 func (p *Parser) continueStmt() Stmt {
@@ -293,7 +293,7 @@ func (p *Parser) exprStmt() Stmt {
 	if expr == nil {
 		return nil
 	}
-	return newExprStmt(expr.Tok(), expr)
+	return newExprStmt(expr)
 }
 
 // ==================
@@ -359,16 +359,13 @@ func (p *Parser) grouping() Expr {
 func (p *Parser) assign(left Expr) Expr {
 	tok := p.consume()
 	right := p.precedence(PREC_ASSIGN-1)
-	switch left.Type() {
-	case GET:
-		get := left.(*Get)
-		return newSet(tok, get.Object, get.Name, right, get.Bound)
-	case IDENTIFIER:
-		return newAssign(tok, left.Tok(), right)
+	switch left := left.(type) {
+	case *Get:
+		return newSet(left.Object, left.Name, left.Bound, right)
+	case *Identifier:
+		return newAssign(left.Id, right)
 	default:
-		// this is not an error worth panicking over.
-		// just move along -- we will put it in `.errors'.
-		p.error(left.Tok(), "invalid assignment target")
+		p.error(tok, "invalid assignment target")
 		return nil
 	}
 }
@@ -391,50 +388,39 @@ func (p *Parser) get(left Expr) Expr {
 	//
 	tok := p.consume()
 	bound := tok.Type == lexer.DOT // is this a binding access or not?
-	right := p.precedence(PREC_CALL)
-	switch right.Type() {
-	case IDENTIFIER:
-		return newGet(tok, left, right.Tok(), bound)
-	case LITERAL:
-		switch right.(*Literal).Tok().Type {
-		case lexer.NIL:
-			fallthrough
-		case lexer.TRUE:
-			fallthrough
-		case lexer.FALSE:
-			return newGet(tok, left, right.Tok(), bound)
-		}
+	name := p.consume()
+	switch name.Type {
+	case lexer.IDENTIFIER, lexer.NIL, lexer.TRUE, lexer.FALSE:
+		return newGet(left, name, bound)
 	}
-	panic(p.error(right.Tok(), "expected a name after %q", tok.Lexeme))
+	panic(p.error(name, "expected a name after %q", tok.Lexeme))
 }
 
 func (p *Parser) binary(left Expr) Expr {
-	tok := p.consume()
-	return newBinary(tok, left, p.precedence(p.precedences[tok.Type]))
+	opToken := p.consume()
+	return newBinary(left, opToken, p.precedence(p.precedences[opToken.Type]))
 }
 
 func (p *Parser) and(left Expr) Expr {
-	tok := p.consume()
-	return newAnd(tok, left, p.precedence(PREC_AND))
+	opToken := p.consume()
+	return newAnd(left, opToken, p.precedence(PREC_AND))
 }
 
 func (p *Parser) or(left Expr) Expr {
-	tok := p.consume()
-	return newOr(tok, left, p.precedence(PREC_AND))
+	opToken := p.consume()
+	return newOr(left, opToken, p.precedence(PREC_AND))
 }
 
 func (p *Parser) identifier() Expr {
-	tok := p.consume()
-	return newIdentifier(tok)
+	return newIdentifier(p.consume())
 }
 
 func (p *Parser) literal() Expr {
-	tok := p.consume()
-	return newLiteral(tok)
+	return newLiteral(p.consume())
 }
 
 func (p *Parser) function() Expr {
-	tok := p.consume()
+	fnTok := p.consume()
 	p.expect(lexer.LEFT_PAREN, "expected a '(' after 'fn'")
 	params := []lexer.Token{}
 	// params
@@ -447,11 +433,11 @@ func (p *Parser) function() Expr {
 	}
 	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
 	block := p.blockStmt().(*Block)
-	return newFunction(tok, params, block)
+	return newFunction(fnTok, params, block)
 }
 
 func (p *Parser) call(left Expr) Expr {
-	tok := p.consume()
+	lParenTok := p.consume()
 	args := []Expr{}
 	for !p.isAtEnd() && !p.check(lexer.RIGHT_PAREN) {
 		args = append(args, p.expression())
@@ -460,28 +446,19 @@ func (p *Parser) call(left Expr) Expr {
 		}
 	}
 	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
-	return newCall(tok, left, args)
+	return newCall(left, lParenTok, args)
 }
 
 func (p *Parser) super() Expr {
-	tok := p.consume()
+	superToken := p.consume()
 	if !p.match(lexer.DOT, lexer.MINUS_GREATER) {
 		panic(p.error(p.peek(), "expect '.' or '->' after 'super'"))
 	}
-	bound := p.previous().Type == lexer.DOT
-	right := p.precedence(PREC_CALL)
-	switch right.Type() {
-	case IDENTIFIER:
-		return newSuper(tok, right.Tok(), bound)
-	case LITERAL:
-		switch right.(*Literal).Tok().Type {
-		case lexer.NIL:
-			fallthrough
-		case lexer.TRUE:
-			fallthrough
-		case lexer.FALSE:
-			return newSuper(tok, right.Tok(), bound)
-		}
+	dot := p.previous()
+	name := p.consume()
+	switch name.Type {
+	case lexer.IDENTIFIER, lexer.NIL, lexer.TRUE, lexer.FALSE:
+		return newSuper(superToken, name, dot.Type == lexer.DOT)
 	}
-	panic(p.error(right.Tok(), "expected a name after %q", tok.Lexeme))
+	panic(p.error(name, "expected a name after %q", dot.Lexeme))
 }

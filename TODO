@@ -1,0 +1,11 @@
+[ ] Arrays and Hash maps.
+[ ] Index operation.
+[ ] Iteration protocol for objects.
+[ ] Resolver tests.
+[ ] Evaluator tests.
+[ ] require(). We already have a module system ready to go, just need
+    to define this function and get it over with.
+[ ] Decide between what to use -- JS-style initializers, or more pure,
+    Io-style object initializers.
+[ ] Decide what to do with .inspect() -- whether we should implement a
+    fully-featured inspect(), or more barebones Lua-style.

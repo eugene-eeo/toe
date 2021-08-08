@@ -108,10 +108,7 @@ func _Number_inspect(ctx *Context, this Value, args []Value) Value {
 }
 
 func _Function_inspect(ctx *Context, this Value, args []Value) Value {
-	if _, ok := this.(*Builtin); ok {
-		return String(fmt.Sprintf("<function %p>", this))
-	}
-	if _, ok := this.(*Function); ok {
+	if this.Type() == BUILTIN || this.Type() == FUNCTION {
 		return String(fmt.Sprintf("<function %p>", this))
 	}
 	return _Object_inspect(ctx, this, args)

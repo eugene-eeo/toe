@@ -104,16 +104,16 @@ type Iterator interface {
 
 type StringIterator struct {
 	ctx *Context
-	s   *String
+	s   String
 	i   int
 }
 
 func (si *StringIterator) End() Value { return NIL }
-func (si *StringIterator) Done() Value { return newBool(si.i >= len(si.s.value)) }
+func (si *StringIterator) Done() Value { return newBool(si.i >= len(string(si.s))) }
 func (si *StringIterator) Next() Value {
-	v := si.s.value[si.i]
+	v := si.s[si.i]
 	si.i++
-	return &String{string(v)}
+	return String(v)
 }
 
 type ArrayIterator struct {
@@ -135,7 +135,7 @@ func (ctx *Context) getIterator(obj Value) (Iterator, bool) {
 	case ARRAY:
 		return &ArrayIterator{ctx: ctx, arr: obj.(*Array)}, true
 	case STRING:
-		return &StringIterator{ctx: ctx, s: obj.(*String)}, true
+		return &StringIterator{ctx: ctx, s: obj.(String)}, true
 	}
 	return nil, false
 }
@@ -150,10 +150,10 @@ func (ctx *Context) evalUnaryValues(op lexer.TokenType, right Value) Value {
 		return newBool(!isTruthy(right))
 	case lexer.MINUS:
 		if right.Type() == NUMBER {
-			return &Number{-right.(*Number).value}
+			return Number(-right.(Number))
 		}
 	}
-	return ctx.err(&String{"unsupported operation"})
+	return ctx.err(String("unsupported operation"))
 }
 
 func (ctx *Context) evalBinaryValues(
@@ -170,16 +170,14 @@ func (ctx *Context) evalBinaryValues(
 	// See if we know how to handle the operator.
 	switch {
 	case left.Type() == NUMBER && right.Type() == NUMBER:
-		return ctx.evalNumberBinary(op, left.(*Number), right.(*Number))
+		return ctx.evalNumberBinary(op, left.(Number), right.(Number))
 	case left.Type() == STRING && right.Type() == STRING:
-		return ctx.evalStringBinary(op, left.(*String), right.(*String))
+		return ctx.evalStringBinary(op, left.(String), right.(String))
 	}
-	return ctx.err(&String{"unsupported operation"})
+	return ctx.err(String("unsupported operation"))
 }
 
-func (ctx *Context) evalNumberBinary(op lexer.TokenType, left, right *Number) Value {
-	lhs := left.value
-	rhs := right.value
+func (ctx *Context) evalNumberBinary(op lexer.TokenType, lhs, rhs Number) Value {
 	switch op {
 	case lexer.EQUAL_EQUAL:
 		return newBool(lhs == rhs)
@@ -194,20 +192,18 @@ func (ctx *Context) evalNumberBinary(op lexer.TokenType, left, right *Number) Va
 	case lexer.LESS_EQUAL:
 		return newBool(lhs <= rhs)
 	case lexer.PLUS:
-		return &Number{lhs + rhs}
+		return lhs + rhs
 	case lexer.MINUS:
-		return &Number{lhs - rhs}
+		return lhs - rhs
 	case lexer.SLASH:
-		return &Number{lhs / rhs}
+		return lhs / rhs
 	case lexer.STAR:
-		return &Number{lhs * rhs}
+		return lhs * rhs
 	}
-	return ctx.err(&String{fmt.Sprintf("unsupported op between numbers: %s", op)})
+	return ctx.err(String(fmt.Sprintf("unsupported op between numbers: %s", op)))
 }
 
-func (ctx *Context) evalStringBinary(op lexer.TokenType, left, right *String) Value {
-	lhs := left.value
-	rhs := right.value
+func (ctx *Context) evalStringBinary(op lexer.TokenType, lhs, rhs String) Value {
 	switch op {
 	case lexer.EQUAL_EQUAL:
 		return newBool(lhs == rhs)
@@ -222,7 +218,7 @@ func (ctx *Context) evalStringBinary(op lexer.TokenType, left, right *String) Va
 	case lexer.LESS_EQUAL:
 		return newBool(lhs <= rhs)
 	case lexer.PLUS:
-		return &String{lhs + rhs}
+		return lhs + rhs
 	}
-	return ctx.err(&String{fmt.Sprintf("unsupported op between strings: %s", op)})
+	return ctx.err(String(fmt.Sprintf("unsupported op between strings: %s", op)))
 }

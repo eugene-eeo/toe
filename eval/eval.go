@@ -10,8 +10,8 @@ import (
 
 var (
 	NIL   = &Nil{}
-	TRUE  = &Boolean{true}
-	FALSE = &Boolean{false}
+	TRUE  = Boolean(true)
+	FALSE = Boolean(false)
 )
 
 type globals struct {
@@ -71,7 +71,7 @@ func (ctx *Context) pushEnv() { ctx.Env = newEnvironment(ctx.Env.filename, ctx.E
 func (ctx *Context) NewModuleEnv(filename string) (*Environment, Value) {
 	new_env := newEnvironment(filename, nil)
 	mod_obj := newObject(ctx.globals.Object)
-	mod_obj.props["filename"] = &String{filename}
+	mod_obj.props["filename"] = String(filename)
 	mod_obj.props["exports"] = newObject(ctx.globals.Object)
 	new_env.Define("puts", &Builtin{fn: func(ctx *Context, this Value, args []Value) Value {
 		for _, x := range args {
@@ -166,9 +166,9 @@ func (ctx *Context) Eval(node parser.Node) Value {
 	case *parser.Literal:
 		switch node.Tok().Type {
 		case lexer.NUMBER:
-			return &Number{node.Token.Literal.(float64)}
+			return Number(node.Token.Literal.(float64))
 		case lexer.STRING:
-			return &String{node.Token.Literal.(string)}
+			return String(node.Token.Literal.(string))
 		case lexer.NIL:
 			return NIL
 		case lexer.TRUE:
@@ -177,156 +177,7 @@ func (ctx *Context) Eval(node parser.Node) Value {
 			return FALSE
 		}
 	}
-	return ctx.err(&String{fmt.Sprintf("not implemented yet: %#+v", node)})
-}
-
-// ===========
-// Expressions
-// ===========
-
-func (ctx *Context) evalBinary(node *parser.Binary) Value {
-	left := ctx.Eval(node.Left)
-	if isError(left) {
-		return left
-	}
-	right := ctx.Eval(node.Right)
-	if isError(right) {
-		return right
-	}
-	rv := ctx.evalBinaryValues(node.Token.Type, left, right)
-	if isError(rv) {
-		rv.(*Error).addContext(node.Token)
-	}
-	return rv
-}
-
-func (ctx *Context) evalAnd(node *parser.And) Value {
-	left := ctx.Eval(node.Left)
-	if isError(left) || !isTruthy(left) {
-		return left
-	}
-	return ctx.Eval(node.Right)
-}
-
-func (ctx *Context) evalOr(node *parser.Or) Value {
-	left := ctx.Eval(node.Left)
-	if isError(left) || isTruthy(left) {
-		return left
-	}
-	return ctx.Eval(node.Right)
-}
-
-func (ctx *Context) evalUnary(node *parser.Unary) Value {
-	right := ctx.Eval(node.Right)
-	if isError(right) {
-		return right
-	}
-	rv := ctx.evalUnaryValues(node.Tok().Type, right)
-	if isError(rv) {
-		rv.(*Error).addContext(node.Token)
-	}
-	return rv
-}
-
-func (ctx *Context) evalGet(node *parser.Get) Value {
-	object := ctx.Eval(node.Object)
-	if isError(object) {
-		return object
-	}
-	attr := node.Name.Lexeme
-	v, ok := ctx.getAttr(object, attr)
-	if !ok {
-		e := ctx.err(&String{fmt.Sprintf("attribute not found: %q", attr)})
-		e.addContext(node.Token)
-		return e
-	}
-	if node.Bound {
-		v = ctx.bind(v, object)
-	}
-	return v
-}
-
-func (ctx *Context) evalSet(node *parser.Set) Value {
-	object := ctx.Eval(node.Object)
-	if isError(object) {
-		return object
-	}
-	attr := node.Name.Lexeme
-	value := ctx.Eval(node.Right)
-	if isError(value) {
-		return value
-	}
-	rv, ok := ctx.setAttr(object, attr, value)
-	if !ok {
-		e := ctx.err(&String{fmt.Sprintf("cannot set attribute %q", attr)})
-		e.addContext(node.Token)
-		return e
-	}
-	if node.Bound {
-		rv = ctx.bind(rv, object)
-	}
-	return rv
-}
-
-func (ctx *Context) evalCall(node *parser.Call) Value {
-	fn := ctx.Eval(node.Fn)
-	if isError(fn) {
-		return fn
-	}
-	args := make([]Value, len(node.Args))
-	for i, arg := range node.Args {
-		args[i] = ctx.Eval(arg)
-		if isError(args[i]) {
-			return args[i]
-		}
-	}
-	rv, ok := ctx.callFunction(fn, args)
-	if !ok {
-		e := ctx.err(&String{fmt.Sprintf("not a function")})
-		e.addContext(node.Token)
-		return e
-	}
-	// unwrap
-	if isReturn(rv) {
-		rv = rv.(*Return).value
-	}
-	if isError(rv) {
-		rv.(*Error).addContext(node.Token)
-	}
-	return rv
-}
-
-func (ctx *Context) evalIdentifier(node *parser.Identifier) Value {
-	ident := node.Tok().Lexeme
-	rv, ok := ctx.Env.GetAt(ctx.locs[node], ident)
-	if !ok {
-		e := ctx.err(&String{fmt.Sprintf("unknown identifier %s", ident)})
-		e.addContext(node.Token)
-		return e
-	}
-	return rv
-}
-
-func (ctx *Context) evalFunction(node *parser.Function) Value {
-	return &Function{
-		this:    nil,
-		node:    node,
-		closure: ctx.Env,
-	}
-}
-
-func (ctx *Context) evalSuper(node *parser.Super) Value {
-	proto := ctx.getPrototype(ctx.this)
-	v, ok := ctx.getAttr(proto, node.Name.Lexeme)
-	if !ok {
-		e := ctx.err(&String{fmt.Sprintf("attribute not found: %q", node.Name.Lexeme)})
-		e.addContext(node.Name)
-		return e
-	}
-	if node.Bound {
-		v = ctx.bind(v, ctx.this)
-	}
-	return v
+	return ctx.err(String(fmt.Sprintf("not implemented yet: %#+v", node)))
 }
 
 // ==========
@@ -357,7 +208,7 @@ func (ctx *Context) evalFor(node *parser.For) Value {
 	iter, ok := ctx.getIterator(it)
 	if !ok {
 		// havent found an iterator?
-		return ctx.err(&String{fmt.Sprintf("not iterable")})
+		return ctx.err(String(fmt.Sprintf("not iterable")))
 	}
 	loopRv := Value(NIL)
 	loopVar := node.Name.Tok().Lexeme
@@ -438,11 +289,160 @@ func (ctx *Context) evalReturn(node *parser.Return) Value {
 	return &Return{rv}
 }
 
+// ===========
+// Expressions
+// ===========
+
+func (ctx *Context) evalBinary(node *parser.Binary) Value {
+	left := ctx.Eval(node.Left)
+	if isError(left) {
+		return left
+	}
+	right := ctx.Eval(node.Right)
+	if isError(right) {
+		return right
+	}
+	rv := ctx.evalBinaryValues(node.Token.Type, left, right)
+	if isError(rv) {
+		rv.(*Error).addContext(node.Token)
+	}
+	return rv
+}
+
+func (ctx *Context) evalAnd(node *parser.And) Value {
+	left := ctx.Eval(node.Left)
+	if isError(left) || !isTruthy(left) {
+		return left
+	}
+	return ctx.Eval(node.Right)
+}
+
+func (ctx *Context) evalOr(node *parser.Or) Value {
+	left := ctx.Eval(node.Left)
+	if isError(left) || isTruthy(left) {
+		return left
+	}
+	return ctx.Eval(node.Right)
+}
+
+func (ctx *Context) evalUnary(node *parser.Unary) Value {
+	right := ctx.Eval(node.Right)
+	if isError(right) {
+		return right
+	}
+	rv := ctx.evalUnaryValues(node.Tok().Type, right)
+	if isError(rv) {
+		rv.(*Error).addContext(node.Token)
+	}
+	return rv
+}
+
+func (ctx *Context) evalGet(node *parser.Get) Value {
+	object := ctx.Eval(node.Object)
+	if isError(object) {
+		return object
+	}
+	attr := node.Name.Lexeme
+	v, ok := ctx.getAttr(object, attr)
+	if !ok {
+		e := ctx.err(String(fmt.Sprintf("attribute not found: %q", attr)))
+		e.addContext(node.Token)
+		return e
+	}
+	if node.Bound {
+		v = ctx.bind(v, object)
+	}
+	return v
+}
+
+func (ctx *Context) evalSet(node *parser.Set) Value {
+	object := ctx.Eval(node.Object)
+	if isError(object) {
+		return object
+	}
+	attr := node.Name.Lexeme
+	value := ctx.Eval(node.Right)
+	if isError(value) {
+		return value
+	}
+	rv, ok := ctx.setAttr(object, attr, value)
+	if !ok {
+		e := ctx.err(String(fmt.Sprintf("cannot set attribute %q", attr)))
+		e.addContext(node.Token)
+		return e
+	}
+	if node.Bound {
+		rv = ctx.bind(rv, object)
+	}
+	return rv
+}
+
+func (ctx *Context) evalCall(node *parser.Call) Value {
+	fn := ctx.Eval(node.Fn)
+	if isError(fn) {
+		return fn
+	}
+	args := make([]Value, len(node.Args))
+	for i, arg := range node.Args {
+		args[i] = ctx.Eval(arg)
+		if isError(args[i]) {
+			return args[i]
+		}
+	}
+	rv, ok := ctx.callFunction(fn, args)
+	if !ok {
+		e := ctx.err(String(fmt.Sprintf("not a function")))
+		e.addContext(node.Token)
+		return e
+	}
+	// unwrap
+	if isReturn(rv) {
+		rv = rv.(*Return).value
+	}
+	if isError(rv) {
+		rv.(*Error).addContext(node.Token)
+	}
+	return rv
+}
+
+func (ctx *Context) evalIdentifier(node *parser.Identifier) Value {
+	ident := node.Tok().Lexeme
+	rv, ok := ctx.Env.GetAt(ctx.locs[node], ident)
+	if !ok {
+		e := ctx.err(String(fmt.Sprintf("unknown identifier %s", ident)))
+		e.addContext(node.Token)
+		return e
+	}
+	return rv
+}
+
+func (ctx *Context) evalFunction(node *parser.Function) Value {
+	return &Function{
+		this:    nil,
+		node:    node,
+		closure: ctx.Env,
+	}
+}
+
+func (ctx *Context) evalSuper(node *parser.Super) Value {
+	proto := ctx.getPrototype(ctx.this)
+	v, ok := ctx.getAttr(proto, node.Name.Lexeme)
+	if !ok {
+		e := ctx.err(String(fmt.Sprintf("attribute not found: %q", node.Name.Lexeme)))
+		e.addContext(node.Name)
+		return e
+	}
+	if node.Bound {
+		v = ctx.bind(v, ctx.this)
+	}
+	return v
+}
+
 // =====
 // Utils
 // =====
 
-func newBool(b bool) *Boolean {
+func newBool(b bool) Boolean {
 	if b {
 		return TRUE
 	} else {

@@ -24,7 +24,7 @@ func _Object_clone(ctx *Context, this Value, args []Value) Value {
 // Function.bind(x) binds the function to x.
 func _Function_bind(ctx *Context, this Value, args []Value) Value {
 	if len(args) == 0 {
-		return ctx.err(&String{fmt.Sprintf("expected 1 argument, got=%d", len(args))})
+		return ctx.err(String(fmt.Sprintf("expected 1 argument, got=%d", len(args))))
 	}
 	newThis := args[0]
 	switch this.(type) {
@@ -33,7 +33,7 @@ func _Function_bind(ctx *Context, this Value, args []Value) Value {
 	case *Builtin:
 		return this.(*Builtin).Bind(newThis)
 	default:
-		return ctx.err(&String{fmt.Sprintf(".bind() called on a non-function")})
+		return ctx.err(String(fmt.Sprintf(".bind() called on a non-function")))
 	}
 }
 
@@ -44,10 +44,10 @@ func _Function_bind(ctx *Context, this Value, args []Value) Value {
 // String.length() returns the length of the string.
 func _String_length(ctx *Context, this Value, args []Value) Value {
 	switch this.(type) {
-	case *String:
-		return &Number{float64(len(this.(*String).value))}
+	case String:
+		return Number(len(this.(String)))
 	default:
-		return ctx.err(&String{fmt.Sprintf(".length() called on a non-string")})
+		return ctx.err(String(fmt.Sprintf(".length() called on a non-string")))
 	}
 }
 
@@ -70,15 +70,15 @@ func _Object_inspect(ctx *Context, this Value, args []Value) Value {
 			buf.WriteString(fmt.Sprintf("  %s=%s,\n", key, value_inspect))
 		}
 		buf.WriteString(")>")
-		return &String{buf.String()}
+		return String(buf.String())
 	}
-	return &String{fmt.Sprintf("<object %p>", this)}
+	return String(fmt.Sprintf("<object %p>", this))
 }
 
 func _Nil_inspect(ctx *Context, this Value, args []Value) Value {
 	switch this {
 	case NIL:
-		return &String{"nil"}
+		return String("nil")
 	}
 	return _Object_inspect(ctx, this, args)
 }
@@ -86,33 +86,33 @@ func _Nil_inspect(ctx *Context, this Value, args []Value) Value {
 func _Boolean_inspect(ctx *Context, this Value, args []Value) Value {
 	switch this {
 	case TRUE:
-		return &String{"true"}
+		return String("true")
 	case FALSE:
-		return &String{"false"}
+		return String("false")
 	}
 	return _Object_inspect(ctx, this, args)
 }
 
 func _String_inspect(ctx *Context, this Value, args []Value) Value {
-	if str, ok := this.(*String); ok {
-		return &String{fmt.Sprintf("%q", str.value)}
+	if str, ok := this.(String); ok {
+		return String(fmt.Sprintf("%q", str))
 	}
 	return _Object_inspect(ctx, this, args)
 }
 
 func _Number_inspect(ctx *Context, this Value, args []Value) Value {
-	if n, ok := this.(*Number); ok {
-		return &String{strconv.FormatFloat(n.value, 'g', -1, 64)}
+	if n, ok := this.(Number); ok {
+		return String(strconv.FormatFloat(float64(n), 'g', -1, 64))
 	}
 	return _Object_inspect(ctx, this, args)
 }
 
 func _Function_inspect(ctx *Context, this Value, args []Value) Value {
 	if _, ok := this.(*Builtin); ok {
-		return &String{fmt.Sprintf("<function %p>", this)}
+		return String(fmt.Sprintf("<function %p>", this))
 	}
 	if _, ok := this.(*Function); ok {
-		return &String{fmt.Sprintf("<function %p>", this)}
+		return String(fmt.Sprintf("<function %p>", this))
 	}
 	return _Object_inspect(ctx, this, args)
 }
@@ -127,9 +127,9 @@ func (ctx *Context) Inspect(v Value) string {
 	if !ok {
 		return fmt.Sprintf("<go value %#v>", v)
 	}
-	str, ok := rv.(*String)
+	str, ok := rv.(String)
 	if !ok {
 		return fmt.Sprintf("<go value %#v>", v)
 	}
-	return str.value
+	return string(str)
 }

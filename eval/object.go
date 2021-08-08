@@ -41,20 +41,20 @@ type Value interface {
 // -----------------
 
 type Nil struct{}
-type Boolean struct{ value bool }
-type Number struct{ value float64 }
-type String struct{ value string }
+type Boolean bool
+type Number float64
+type String string
 
 type Object struct {
 	props map[string]Value
 	proto Value
 }
 
-func (v *Nil) Type() ValueType     { return NIL_TYPE }
-func (v *Boolean) Type() ValueType { return BOOLEAN }
-func (v *Number) Type() ValueType  { return NUMBER }
-func (v *String) Type() ValueType  { return STRING }
-func (v *Object) Type() ValueType  { return OBJECT }
+func (v Nil) Type() ValueType     { return NIL_TYPE }
+func (v Boolean) Type() ValueType { return BOOLEAN }
+func (v Number) Type() ValueType  { return NUMBER }
+func (v String) Type() ValueType  { return STRING }
+func (v *Object) Type() ValueType { return OBJECT }
 
 func newObject(object Value) *Object {
 	return &Object{

@@ -213,3 +213,17 @@ func (node *Function) String() string {
 	buf.WriteString(node.Body.String())
 	return buf.String()
 }
+
+func (node *Super) String() string {
+	var buf bytes.Buffer
+	buf.WriteString("(")
+	buf.WriteString(node.Tok().Lexeme)
+	if node.Bound {
+		buf.WriteString(".")
+	} else {
+		buf.WriteString("->")
+	}
+	buf.WriteString(node.Name.Lexeme)
+	buf.WriteString(")")
+	return buf.String()
+}

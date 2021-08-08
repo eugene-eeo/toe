@@ -16,17 +16,17 @@ import (
 func (ctx *Context) getPrototype(obj Value) Value {
 	switch obj.Type() {
 	case NIL_TYPE:
-		return ctx._Nil
+		return ctx.globals.Nil
 	case BOOLEAN:
-		return ctx._Boolean
+		return ctx.globals.Boolean
 	case STRING:
-		return ctx._String
+		return ctx.globals.String
 	case NUMBER:
-		return ctx._Number
+		return ctx.globals.Number
 	case BUILTIN:
 		fallthrough
 	case FUNCTION:
-		return ctx._Function
+		return ctx.globals.Function
 	case OBJECT:
 		return obj.(*Object).proto
 	}

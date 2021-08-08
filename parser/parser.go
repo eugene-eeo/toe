@@ -51,6 +51,7 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.BANG:       p.unary,
 		lexer.MINUS:      p.unary,
 		lexer.FN:         p.function,
+		lexer.SUPER:      p.super,
 	}
 	// note: need to make sure that every entry in binaryParsers
 	// has a corresponding entry in precedences.
@@ -214,38 +215,38 @@ func (p *Parser) statement() Stmt {
 
 func (p *Parser) letStmt() Stmt {
 	token := p.consume()
-	ident := p.expect(lexer.IDENTIFIER, "expected an identifier")
-	p.expect(lexer.EQUAL, "expected =")
+	ident := p.expect(lexer.IDENTIFIER, "expect an identifier")
+	p.expect(lexer.EQUAL, "expect '=' after identifier")
 	expr := p.expression()
-	p.expect(lexer.SEMICOLON, "expected ; after variable declaration")
+	p.expect(lexer.SEMICOLON, "expect ';' after variable declaration")
 	return newLet(token, ident, expr)
 }
 
 func (p *Parser) forStmt() Stmt {
-	token := p.consume() // the 'for' token
-	p.expect(lexer.LEFT_PAREN, "expected (")
-	ident := p.expect(lexer.IDENTIFIER, "expected an identifier")
-	p.expect(lexer.COLON, "expected :")
+	token := p.consume()
+	p.expect(lexer.LEFT_PAREN, "expect '(' after 'for'")
+	ident := p.expect(lexer.IDENTIFIER, "expect an identifier after '('")
+	p.expect(lexer.COLON, "expect ':' after identifier")
 	iter := p.expression()
-	p.expect(lexer.RIGHT_PAREN, "unclosed (")
+	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
 	stmt := p.statement()
 	return newFor(token, newIdentifier(ident), iter, stmt)
 }
 
 func (p *Parser) whileStmt() Stmt {
 	token := p.consume()
-	p.expect(lexer.LEFT_PAREN, "expected (")
+	p.expect(lexer.LEFT_PAREN, "expect '(' after 'while'")
 	cond := p.expression()
-	p.expect(lexer.RIGHT_PAREN, "unclosed (")
+	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
 	stmt := p.statement()
 	return newWhile(token, cond, stmt)
 }
 
 func (p *Parser) ifStmt() Stmt {
 	token := p.consume()
-	p.expect(lexer.LEFT_PAREN, "expected (")
+	p.expect(lexer.LEFT_PAREN, "expect '(' after 'if'")
 	cond := p.expression()
-	p.expect(lexer.RIGHT_PAREN, "unclosed (")
+	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
 	then := p.statement()
 	var elseStmt Stmt = nil
 	if p.match(lexer.ELSE) {
@@ -260,19 +261,19 @@ func (p *Parser) blockStmt() Stmt {
 	for !p.isAtEnd() && !p.check(lexer.RIGHT_BRACE) {
 		stmts = append(stmts, p.declaration())
 	}
-	p.expect(lexer.RIGHT_BRACE, "unmatched {")
+	p.expect(lexer.RIGHT_BRACE, "unclosed '{'")
 	return newBlock(token, stmts)
 }
 
 func (p *Parser) continueStmt() Stmt {
 	token := p.consume()
-	p.expect(lexer.SEMICOLON, "expected ; after continue")
+	p.expect(lexer.SEMICOLON, "expect ';' after 'continue'")
 	return newContinue(token)
 }
 
 func (p *Parser) breakStmt() Stmt {
 	token := p.consume()
-	p.expect(lexer.SEMICOLON, "expected ; after break")
+	p.expect(lexer.SEMICOLON, "expect ';' after 'break'")
 	return newBreak(token)
 }
 
@@ -282,13 +283,13 @@ func (p *Parser) returnStmt() Stmt {
 	if !p.check(lexer.SEMICOLON) {
 		expr = p.expression()
 	}
-	p.expect(lexer.SEMICOLON, "expected ; after return")
+	p.expect(lexer.SEMICOLON, "expect ';' after 'return'")
 	return newReturn(token, expr)
 }
 
 func (p *Parser) exprStmt() Stmt {
 	expr := p.expression()
-	p.expect(lexer.SEMICOLON, "expected ; after expression statement")
+	p.expect(lexer.SEMICOLON, "expect ';' after expression statement")
 	if expr == nil {
 		return nil
 	}
@@ -308,6 +309,7 @@ func (p *Parser) exprStmt() Stmt {
 //            | unary
 //            | call | get
 //            | literal
+//            | super
 // assign   → ( get | IDENTIFIER ) "=" expression
 // and      → expression "and" expression
 // or       → expression "or" expression
@@ -319,6 +321,7 @@ func (p *Parser) exprStmt() Stmt {
 // literal  → STRING | IDENTIFIER | NUMBER | TRUE | FALSE | NIL | func
 // function → "fn" "(" params ")" block
 // params   → IDENTIFIER ( "," params )? | ε
+// super    → "super" "." IDENTIFIER
 
 // expression matches a single expression.
 func (p *Parser) expression() Expr { return p.precedence(PREC_LOWEST) }
@@ -349,7 +352,7 @@ func (p *Parser) unary() Expr {
 func (p *Parser) grouping() Expr {
 	p.consume()
 	expr := p.expression()
-	p.expect(lexer.RIGHT_PAREN, "unmatched (")
+	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
 	return expr
 }
 
@@ -389,7 +392,6 @@ func (p *Parser) get(left Expr) Expr {
 	tok := p.consume()
 	bound := tok.Type == lexer.DOT // is this a binding access or not?
 	right := p.precedence(PREC_CALL)
-	// we allow any names
 	switch right.Type() {
 	case IDENTIFIER:
 		return newGet(tok, left, right.Tok(), bound)
@@ -403,7 +405,7 @@ func (p *Parser) get(left Expr) Expr {
 			return newGet(tok, left, right.Tok(), bound)
 		}
 	}
-	panic(p.error(right.Tok(), "expected an identifier after %s", tok.Lexeme))
+	panic(p.error(right.Tok(), "expected a name after %q", tok.Lexeme))
 }
 
 func (p *Parser) binary(left Expr) Expr {
@@ -433,17 +435,17 @@ func (p *Parser) literal() Expr {
 
 func (p *Parser) function() Expr {
 	tok := p.consume()
-	p.expect(lexer.LEFT_PAREN, "expected a ( after 'fn'")
+	p.expect(lexer.LEFT_PAREN, "expected a '(' after 'fn'")
 	params := []lexer.Token{}
 	// params
 	for !p.isAtEnd() && !p.check(lexer.RIGHT_PAREN) {
-		tok := p.expect(lexer.IDENTIFIER, "expected an identifier, got: %s", p.peek().Type)
+		tok := p.expect(lexer.IDENTIFIER, "expect an identifier or ')' after '('")
 		params = append(params, tok)
 		if !p.match(lexer.COMMA) {
 			break
 		}
 	}
-	p.expect(lexer.RIGHT_PAREN, "unmatched (")
+	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
 	block := p.blockStmt().(*Block)
 	return newFunction(tok, params, block)
 }
@@ -457,6 +459,29 @@ func (p *Parser) call(left Expr) Expr {
 			break
 		}
 	}
-	p.expect(lexer.RIGHT_PAREN, "unmatched (")
+	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
 	return newCall(tok, left, args)
+}
+
+func (p *Parser) super() Expr {
+	tok := p.consume()
+	if !p.match(lexer.DOT, lexer.MINUS_GREATER) {
+		panic(p.error(p.peek(), "expect '.' or '->' after 'super'"))
+	}
+	bound := p.previous().Type == lexer.DOT
+	right := p.precedence(PREC_CALL)
+	switch right.Type() {
+	case IDENTIFIER:
+		return newSuper(tok, right.Tok(), bound)
+	case LITERAL:
+		switch right.(*Literal).Tok().Type {
+		case lexer.NIL:
+			fallthrough
+		case lexer.TRUE:
+			fallthrough
+		case lexer.FALSE:
+			return newSuper(tok, right.Tok(), bound)
+		}
+	}
+	panic(p.error(right.Tok(), "expected a name after %q", tok.Lexeme))
 }

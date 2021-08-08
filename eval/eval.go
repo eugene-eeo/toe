@@ -14,79 +14,78 @@ var (
 	FALSE = &Boolean{false}
 )
 
+type globals struct {
+	Object   *Object // Object
+	Nil      *Object // Nil (prototype of nil)
+	Boolean  *Object // Boolean
+	Function *Object // Function
+	Number   *Object // Number
+	String   *Object // String
+	Array    *Object // Array
+	Error    *Object // Error
+}
+
 type Context struct {
-	Env    *Environment        // current executing environment.
-	locs   map[parser.Expr]int // map of resolvable expressions to distance.
-	ctxs   []string            // list of contexts, for error tracing
-	// 'global' values
-	_Object   *Object // Object
-	_Nil      *Object // Nil (prototype of nil)
-	_Boolean  *Object // Boolean
-	_Function *Object // Function
-	_Number   *Object // Number
-	_String   *Object // String
-	_Array    *Object
+	Env     *Environment        // current executing environment.
+	locs    map[parser.Expr]int // map of resolvable expressions to distance.
+	funcs   []string            // list of function calls we're currently executing, for error tracing.
+	this    Value               // `this' of the currently executing function, if any.
+	globals *globals            // 'global' values
 }
 
 func NewContext(locs map[parser.Expr]int) *Context {
-	ctx := &Context{}
-	ctx.locs = locs
+	ctx := &Context{
+		locs:    locs,
+		funcs:   []string{},
+		globals: &globals{},
+	}
 	// bootstrap the object system
-	ctx._Object = newObject(nil)
-	ctx._Nil = newObject(ctx._Object) // even nil is an Object
-	ctx._Boolean = newObject(ctx._Object)
-	ctx._Function = newObject(ctx._Object)
-	ctx._Number = newObject(ctx._Object)
-	ctx._String = newObject(ctx._Object)
-	ctx._Array = newObject(ctx._Object)
+	ctx.globals.Object = newObject(nil)
+	ctx.globals.Nil = newObject(ctx.globals.Object) // even nil is an Object
+	ctx.globals.Boolean = newObject(ctx.globals.Object)
+	ctx.globals.Function = newObject(ctx.globals.Object)
+	ctx.globals.Number = newObject(ctx.globals.Object)
+	ctx.globals.String = newObject(ctx.globals.Object)
+	ctx.globals.Array = newObject(ctx.globals.Object)
 	// methods
-	ctx._Object.props["clone"] = &Builtin{fn: _Object_clone}
-	ctx._Object.props["inspect"] = &Builtin{fn: _Object_inspect}
+	ctx.globals.Object.props["clone"] = &Builtin{fn: _Object_clone}
+	ctx.globals.Object.props["inspect"] = &Builtin{fn: _Object_inspect}
 
-	ctx._Nil.props["inspect"] = &Builtin{fn: _Nil_inspect}
+	ctx.globals.Nil.props["inspect"] = &Builtin{fn: _Nil_inspect}
 
-	ctx._Boolean.props["inspect"] = &Builtin{fn: _Boolean_inspect}
+	ctx.globals.Boolean.props["inspect"] = &Builtin{fn: _Boolean_inspect}
 
-	ctx._Function.props["bind"] = &Builtin{fn: _Function_bind}
-	ctx._Function.props["inspect"] = &Builtin{fn: _Function_inspect}
+	ctx.globals.Function.props["bind"] = &Builtin{fn: _Function_bind}
+	ctx.globals.Function.props["inspect"] = &Builtin{fn: _Function_inspect}
 
-	ctx._Number.props["inspect"] = &Builtin{fn: _Number_inspect}
+	ctx.globals.Number.props["inspect"] = &Builtin{fn: _Number_inspect}
 
-	ctx._String.props["length"] = &Builtin{fn: _String_length}
-	ctx._String.props["inspect"] = &Builtin{fn: _String_inspect}
+	ctx.globals.String.props["length"] = &Builtin{fn: _String_length}
+	ctx.globals.String.props["inspect"] = &Builtin{fn: _String_inspect}
 	return ctx
 }
 
-func (ctx *Context) err(reason Value) *Error {
-	return &Error{
-		ctx: ctx,
-		Reason: reason,
-		Trace: []TraceEntry{},
-	}
-}
-
-func (ctx *Context) popCtx() { ctx.ctxs = ctx.ctxs[:len(ctx.ctxs)-1] }
-func (ctx *Context) pushCtx(s string) { ctx.ctxs = append(ctx.ctxs, s) }
-func (ctx *Context) currCtx() string { return ctx.ctxs[len(ctx.ctxs)-1] }
-
-func (ctx *Context) popEnv() { ctx.Env = ctx.Env.outer }
-func (ctx *Context) pushEnv() *Environment {
-	ctx.Env = newEnvironment(ctx.Env.filename, ctx.Env)
-	return ctx.Env
-}
+func (ctx *Context) popEnv()  { ctx.Env = ctx.Env.outer }
+func (ctx *Context) pushEnv() { ctx.Env = newEnvironment(ctx.Env.filename, ctx.Env) }
 
 func (ctx *Context) NewModuleEnv(filename string) (*Environment, Value) {
 	new_env := newEnvironment(filename, nil)
-	mod_obj := newObject(ctx._Object)
+	mod_obj := newObject(ctx.globals.Object)
 	mod_obj.props["filename"] = &String{filename}
-	mod_obj.props["exports"] = newObject(ctx._Object)
+	mod_obj.props["exports"] = newObject(ctx.globals.Object)
+	new_env.Define("puts", &Builtin{fn: func(ctx *Context, this Value, args []Value) Value {
+		for _, x := range args {
+			fmt.Println(x)
+		}
+		return NIL
+	}})
 	new_env.Define("module", mod_obj)
-	new_env.Define("Object", ctx._Object)
-	new_env.Define("Boolean", ctx._Boolean)
-	new_env.Define("Number", ctx._Number)
-	new_env.Define("String", ctx._String)
-	new_env.Define("Array", ctx._Array)
-	new_env.Define("Function", ctx._Function)
+	new_env.Define("Object", ctx.globals.Object)
+	new_env.Define("Boolean", ctx.globals.Boolean)
+	new_env.Define("Number", ctx.globals.Number)
+	new_env.Define("String", ctx.globals.String)
+	new_env.Define("Array", ctx.globals.Array)
+	new_env.Define("Function", ctx.globals.Function)
 	return new_env, mod_obj
 }
 
@@ -94,14 +93,14 @@ func (ctx *Context) EvalModule(module *parser.Module) Value {
 	new_env, mod_obj := ctx.NewModuleEnv(module.Filename)
 	og_env := ctx.Env
 	ctx.Env = new_env
-	ctx.pushCtx("<module>")
+	ctx.pushFunc("<module>")
 	for _, stmt := range module.Stmts {
 		v := ctx.Eval(stmt)
 		if isError(v) {
 			return v
 		}
 	}
-	ctx.popCtx()
+	ctx.popFunc()
 	ctx.Env = og_env
 	return mod_obj
 }
@@ -126,7 +125,8 @@ func (ctx *Context) Eval(node parser.Node) Value {
 	case *parser.If:
 		return ctx.evalIf(node)
 	case *parser.ExprStmt:
-		return ctx.Eval(node.Expr)
+		ctx.Eval(node.Expr)
+		return NIL
 	case *parser.Break:
 		return &Break{}
 	case *parser.Continue:
@@ -160,6 +160,8 @@ func (ctx *Context) Eval(node parser.Node) Value {
 		return ctx.evalIdentifier(node)
 	case *parser.Function:
 		return ctx.evalFunction(node)
+	case *parser.Super:
+		return ctx.evalSuper(node)
 	// Literals
 	case *parser.Literal:
 		switch node.Tok().Type {
@@ -193,7 +195,7 @@ func (ctx *Context) evalBinary(node *parser.Binary) Value {
 	}
 	rv := ctx.evalBinaryValues(node.Token.Type, left, right)
 	if isError(rv) {
-		rv.(*Error).addTrace(ctx.Env.filename, node.Token.Line, node.Token.Column)
+		rv.(*Error).addContext(node.Token)
 	}
 	return rv
 }
@@ -221,7 +223,7 @@ func (ctx *Context) evalUnary(node *parser.Unary) Value {
 	}
 	rv := ctx.evalUnaryValues(node.Tok().Type, right)
 	if isError(rv) {
-		rv.(*Error).addTrace(ctx.Env.filename, node.Token.Line, node.Token.Column)
+		rv.(*Error).addContext(node.Token)
 	}
 	return rv
 }
@@ -235,7 +237,7 @@ func (ctx *Context) evalGet(node *parser.Get) Value {
 	v, ok := ctx.getAttr(object, attr)
 	if !ok {
 		e := ctx.err(&String{fmt.Sprintf("attribute not found: %q", attr)})
-		e.addTrace(ctx.Env.filename, node.Token.Line, node.Token.Column)
+		e.addContext(node.Token)
 		return e
 	}
 	if node.Bound {
@@ -257,7 +259,7 @@ func (ctx *Context) evalSet(node *parser.Set) Value {
 	rv, ok := ctx.setAttr(object, attr, value)
 	if !ok {
 		e := ctx.err(&String{fmt.Sprintf("cannot set attribute %q", attr)})
-		e.addTrace(ctx.Env.filename, node.Token.Line, node.Token.Column)
+		e.addContext(node.Token)
 		return e
 	}
 	if node.Bound {
@@ -280,8 +282,8 @@ func (ctx *Context) evalCall(node *parser.Call) Value {
 	}
 	rv, ok := ctx.callFunction(fn, args)
 	if !ok {
-		e := ctx.err(&String{fmt.Sprintf("not callable")})
-		e.addTrace(ctx.Env.filename, node.Token.Line, node.Token.Column)
+		e := ctx.err(&String{fmt.Sprintf("not a function")})
+		e.addContext(node.Token)
 		return e
 	}
 	// unwrap
@@ -289,7 +291,18 @@ func (ctx *Context) evalCall(node *parser.Call) Value {
 		rv = rv.(*Return).value
 	}
 	if isError(rv) {
-		rv.(*Error).addTrace(ctx.Env.filename, node.Token.Line, node.Token.Column)
+		rv.(*Error).addContext(node.Token)
+	}
+	return rv
+}
+
+func (ctx *Context) evalIdentifier(node *parser.Identifier) Value {
+	ident := node.Tok().Lexeme
+	rv, ok := ctx.Env.GetAt(ctx.locs[node], ident)
+	if !ok {
+		e := ctx.err(&String{fmt.Sprintf("unknown identifier %s", ident)})
+		e.addContext(node.Token)
+		return e
 	}
 	return rv
 }
@@ -302,15 +315,18 @@ func (ctx *Context) evalFunction(node *parser.Function) Value {
 	}
 }
 
-func (ctx *Context) evalIdentifier(node *parser.Identifier) Value {
-	ident := node.Tok().Lexeme
-	rv, ok := ctx.Env.GetAt(ctx.locs[node], ident)
+func (ctx *Context) evalSuper(node *parser.Super) Value {
+	proto := ctx.getPrototype(ctx.this)
+	v, ok := ctx.getAttr(proto, node.Name.Lexeme)
 	if !ok {
-		e := ctx.err(&String{fmt.Sprintf("unknown identifier %s", ident)})
-		e.addTrace(ctx.Env.filename, node.Token.Line, node.Token.Column)
+		e := ctx.err(&String{fmt.Sprintf("attribute not found: %q", node.Name.Lexeme)})
+		e.addContext(node.Name)
 		return e
 	}
-	return rv
+	if node.Bound {
+		v = ctx.bind(v, ctx.this)
+	}
+	return v
 }
 
 // ==========
@@ -320,16 +336,15 @@ func (ctx *Context) evalIdentifier(node *parser.Identifier) Value {
 func (ctx *Context) evalBlock(node *parser.Block) Value {
 	// Blocks evaluate to the return-value of the last statement in the block.
 	// Where we encounter continue / break, we will return that signal.
-	var rv Value = NIL
 	ctx.pushEnv()
 	defer ctx.popEnv()
 	for _, stmt := range node.Statements {
-		rv = ctx.Eval(stmt)
+		rv := ctx.Eval(stmt)
 		if isError(rv) || isBreak(rv) || isContinue(rv) || isReturn(rv) {
 			return rv
 		}
 	}
-	return rv
+	return NIL
 }
 
 func (ctx *Context) evalFor(node *parser.For) Value {
@@ -435,8 +450,8 @@ func newBool(b bool) *Boolean {
 	}
 }
 
+func isTruthy(v Value) bool   { return v != FALSE && v != NIL }
 func isReturn(v Value) bool   { return v.Type() == RETURN }
 func isBreak(v Value) bool    { return v.Type() == BREAK }
 func isContinue(v Value) bool { return v.Type() == CONTINUE }
 func isError(v Value) bool    { return v.Type() == ERROR }
-func isTruthy(v Value) bool   { return v != FALSE && v != NIL }

@@ -86,8 +86,8 @@ func (v *Builtin) Call(ctx *Context, args []Value) Value {
 	if this == nil {
 		this = NIL
 	}
-	ctx.pushCtx("builtin function")
-	defer ctx.popCtx()
+	ctx.pushFunc("builtin function")
+	defer ctx.popFunc()
 	return v.fn(ctx, this, args)
 }
 
@@ -109,13 +109,15 @@ func (v *Function) Bind(this Value) *Function {
 func (v *Function) Call(ctx *Context, args []Value) Value {
 	// remember the current environment
 	old_env := ctx.Env
+	old_this := ctx.this
 	// create a new environment with bound parameters
 	ctx.Env = newEnvironment(v.closure.filename, v.closure)
-	ctx.pushCtx("function")
+	ctx.pushFunc("function")
 	this := v.this
 	if this == nil {
 		this = NIL
 	}
+	ctx.this = this
 	ctx.Env.Define("this", this)
 	for i, param := range v.node.Params {
 		value := Value(NIL)
@@ -126,8 +128,9 @@ func (v *Function) Call(ctx *Context, args []Value) Value {
 	}
 	rv := ctx.Eval(v.node.Body)
 	// restore the old environment
+	ctx.this = old_this
 	ctx.Env = old_env
-	ctx.popCtx()
+	ctx.popFunc()
 	return rv
 }
 
@@ -140,15 +143,6 @@ type Error struct {
 	ctx    *Context
 	Reason Value
 	Trace  []TraceEntry
-}
-
-func (e *Error) addTrace(filename string, line int, col int) {
-	e.Trace = append(e.Trace, TraceEntry{
-		Filename: filename,
-		Line:     line,
-		Column:   col,
-		Context:  e.ctx.currCtx(),
-	})
 }
 
 func (e *Error) String() string {

@@ -25,6 +25,7 @@ const (
 	IDENTIFIER
 	LITERAL
 	FUNCTION
+	SUPER
 )
 
 type Let struct {
@@ -220,6 +221,16 @@ func (node *Function) Tok() lexer.Token { return node.Token }
 func (node *Function) Type() NodeType   { return FUNCTION }
 func (node *Function) expr()            {}
 
+type Super struct {
+	Token lexer.Token
+	Name  lexer.Token
+	Bound bool
+}
+
+func (node *Super) Tok() lexer.Token { return node.Token }
+func (node *Super) Type() NodeType   { return SUPER }
+func (node *Super) expr()            {}
+
 func newLet(Token lexer.Token, Name lexer.Token, Value Expr) *Let {
 	return &Let{Token: Token, Name: Name, Value: Value}
 }
@@ -284,4 +295,8 @@ func newLiteral(Token lexer.Token) *Literal { return &Literal{Token: Token} }
 
 func newFunction(Token lexer.Token, Params []lexer.Token, Body *Block) *Function {
 	return &Function{Token: Token, Params: Params, Body: Body}
+}
+
+func newSuper(Token lexer.Token, Name lexer.Token, Bound bool) *Super {
+	return &Super{Token: Token, Name: Name, Bound: Bound}
 }

@@ -16,7 +16,7 @@ func NewInteractiveContext() *InteractiveContext {
 	res := resolver.New(module)
 	ctx := NewContext(res.Locs)
 	ctx.Env, _ = ctx.NewModuleEnv("<stdin>")
-	ctx.pushCtx("<module>")
+	ctx.pushFunc("<module>")
 	return &InteractiveContext{
 		ctx, res,
 	}

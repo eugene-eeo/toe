@@ -58,6 +58,7 @@ func New(module *parser.Module) *Resolver {
 	r.push() // the global scope.
 	scope := r.curr()
 	scope["module"] = true
+	scope["puts"] = true
 	scope["Object"] = true
 	scope["Boolean"] = true
 	scope["Number"] = true
@@ -146,6 +147,8 @@ func (r *Resolver) resolve(node parser.Node) {
 		return
 	case *parser.Function:
 		r.resolveFunction(node)
+	case *parser.Super:
+		r.resolveSuper(node)
 	default:
 		panic(fmt.Sprintf("unhandled node: %#+v", node))
 	}
@@ -265,6 +268,13 @@ func (r *Resolver) resolveSet(node *parser.Set) {
 	r.resolve(node.Object)
 }
 
+func (r *Resolver) resolveCall(node *parser.Call) {
+	r.resolve(node.Fn)
+	for _, arg := range node.Args {
+		r.resolve(arg)
+	}
+}
+
 func (r *Resolver) resolveIdentifier(node *parser.Identifier) {
 	r.annotate(node, node.Token)
 }
@@ -285,11 +295,10 @@ func (r *Resolver) resolveFunction(node *parser.Function) {
 	r.ctrl = ctrl
 }
 
-func (r *Resolver) resolveCall(node *parser.Call) {
-	for _, arg := range node.Args {
-		r.resolve(arg)
+func (r *Resolver) resolveSuper(node *parser.Super) {
+	if r.ctrl&FUNC == 0 {
+		r.err(node.Token, "super outside of function")
 	}
-	r.resolve(node.Fn)
 }
 
 func (r *Resolver) annotate(node parser.Expr, token lexer.Token) {

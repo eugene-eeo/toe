@@ -45,6 +45,8 @@ func TestParserValid(t *testing.T) {
 		{"isEven(1,);", "(isEven(1));"},
 		{"isEven(1,2,3,4,5,);", "(isEven(1, 2, 3, 4, 5));"},
 		{"isEven.call(n)->this.that;", "((((isEven.call)(n))->this).that);"},
+		{"super->a(123);", "((super->a)(123));"},
+		{"super.a.b(123);", "(((super.a).b)(123));"},
 	}
 	for i, test := range tests {
 		var tokens []lexer.Token

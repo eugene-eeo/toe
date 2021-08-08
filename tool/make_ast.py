@@ -134,5 +134,6 @@ if __name__ == '__main__':
     expr('IDENTIFIER', 'Identifier', fields=[])
     expr('LITERAL', 'Literal', fields=[])
     expr('FUNCTION', 'Function', fields=['Params []lexer.Token', 'Body *Block'])
+    expr('SUPER', 'Super', fields=['Name lexer.Token', 'Bound bool'])
     # autopep8: on
     generate()

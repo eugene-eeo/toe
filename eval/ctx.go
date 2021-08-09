@@ -1,4 +1,4 @@
-package eval2
+package eval
 
 import (
 	"fmt"
@@ -358,6 +358,10 @@ func (ctx *Context) evalFunction(node *parser.Function) Value {
 
 func (ctx *Context) evalSuper(node *parser.Super) Value {
 	proto := ctx.getPrototype(ctx.this)
+	if proto == nil {
+		e := newError(String("object has nil prototype"))
+		return ctx.addErrorStack(e, node.Tok)
+	}
 	value := ctx.getSlot(proto, node.Name.Lexeme)
 	if isError(value) {
 		return ctx.addErrorStack(value.(*Error), node.Name)
@@ -370,8 +374,6 @@ func (ctx *Context) evalSuper(node *parser.Super) Value {
 // =========
 
 func (ctx *Context) addErrorStack(err *Error, token lexer.Token) *Error {
-	// fmt.Println(err.stack)
-	// fmt.Println(ctx.stack)
 	err.stack = append(err.stack, context{
 		fn:  ctx.module.Filename,
 		ln:  token.Line,

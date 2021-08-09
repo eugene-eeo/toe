@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"toe/eval2"
+	"toe/eval"
 	"github.com/chzyer/readline"
 )
 
 var VERSION string
 var LOGO = `
   __                 |
- |  |_.-----.-----.  | toe language
+ |  |_.-----.-----.  | toe repl
  |   _|  _  |  -__|  | version: $VERSION
  |____|_____|_____|  |
 `
@@ -44,7 +44,7 @@ func main() {
 	}
 	defer rl.Close()
 
-	ctx := eval2.NewInteractiveContext()
+	ctx := eval.NewInteractiveContext()
 	for {
 		line, err := rl.Readline()
 		if err != nil {
@@ -56,8 +56,8 @@ func main() {
 		} else {
 			if u == nil {
 				continue
-			} else if u.Type() == eval2.VT_ERROR {
-				fmt.Fprintln(os.Stderr, u.(*eval2.Error).String())
+			} else if u.Type() == eval.VT_ERROR {
+				fmt.Fprintln(os.Stderr, u.(*eval.Error).String())
 			} else {
 				fmt.Println(ctx.Inspect(u))
 			}

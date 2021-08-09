@@ -1,4 +1,4 @@
-package eval2
+package eval
 
 import (
 	"fmt"
@@ -54,6 +54,10 @@ func getIterator(v Value) (Iterator, bool) {
 // Toe is prototype-based; thus there are no classes, just objects (bag-of-values).
 // Below we implement the functions needed to modify these objects. Note that some
 // of them may return error values; you have to check for them!
+//
+//  1. Whenever we see a nil prototype, we can stop searching.
+//  2. All built-in `types' have prototype == Object, except for nil.
+//  3. Object's prototype == nil.
 
 // -------
 // Binding
@@ -87,6 +91,8 @@ func (f *Function) Bind(this Value) *Function {
 func (ctx *Context) getPrototype(obj Value) Value {
 	switch obj := obj.(type) {
 	case *Object:
+		return obj.proto
+	case *Function:
 		return obj.proto
 	}
 	return nil
@@ -203,6 +209,16 @@ func (ctx *Context) binary(op lexer.TokenType, left, right Value) Value {
 		return Boolean(left == right)
 	case op == lexer.BANG_EQUAL:
 		return Boolean(left != right)
+	case left.Type() == VT_NUMBER && right.Type() == VT_NUMBER:
+		rv := numberBinaryOp(op, left.(Number), right.(Number))
+		if rv != nil {
+			return rv
+		}
+	case left.Type() == VT_STRING && right.Type() == VT_STRING:
+		rv := stringBinaryOp(op, left.(String), right.(String))
+		if rv != nil {
+			return rv
+		}
 	}
 	err := newError(String(fmt.Sprintf(
 		"unsupported operands for %q: %s and %s",
@@ -217,6 +233,8 @@ func (ctx *Context) unary(op lexer.TokenType, right Value) Value {
 	switch {
 	case op == lexer.BANG:
 		return Boolean(!isTruthy(right))
+	case op == lexer.MINUS && right.Type() == VT_NUMBER:
+		return Number(-right.(Number))
 	}
 	err := newError(String(fmt.Sprintf(
 		"unsupported operand for %q: %s",

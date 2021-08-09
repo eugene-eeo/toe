@@ -1,4 +1,4 @@
-package eval2
+package eval
 
 type environment struct {
 	store map[string]Value

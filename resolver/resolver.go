@@ -6,8 +6,8 @@
 package resolver
 
 import (
-	"fmt"
 	"errors"
+	"fmt"
 	"toe/lexer"
 	"toe/parser"
 )
@@ -74,8 +74,8 @@ func (r *Resolver) err(tok lexer.Token, msg string) {
 // Clean up frees memory used by the resolver -- this can only be done
 // after reporting errors, as it clears the errors as well.
 func (r *Resolver) Cleanup() {
-	r.scopes = nil;
-	r.Errors = nil;
+	r.scopes = nil
+	r.Errors = nil
 }
 
 // ResolveOne resolves the given node -- it is mainly for
@@ -313,11 +313,11 @@ func (r *Resolver) lookup(node parser.Expr, token lexer.Token) {
 			//  1. we're in a function AND
 			//  2. we didn't find the name in the current scope.
 			// this is to allow functions to refer to themselves.
-			if !initialised && !((r.ctrl & FUNC) != 0 || i != curr) {
+			if !initialised && !((r.ctrl&FUNC) != 0 || i != curr) {
 				r.err(token, fmt.Sprintf("cannot access %q before initialization", name))
 				return
 			}
-			addLocation(node, curr - i)
+			addLocation(node, curr-i)
 			return
 		}
 	}

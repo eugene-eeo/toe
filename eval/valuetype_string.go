@@ -14,15 +14,16 @@ func _() {
 	_ = x[VT_STRING-4]
 	_ = x[VT_FUNCTION-5]
 	_ = x[VT_OBJECT-6]
-	_ = x[VT_BREAK-7]
-	_ = x[VT_CONTINUE-8]
-	_ = x[VT_RETURN-9]
-	_ = x[VT_ERROR-10]
+	_ = x[VT_ARRAY-7]
+	_ = x[VT_BREAK-8]
+	_ = x[VT_CONTINUE-9]
+	_ = x[VT_RETURN-10]
+	_ = x[VT_ERROR-11]
 }
 
-const _ValueType_name = "VT_NILVT_BOOLEANVT_NUMBERVT_STRINGVT_FUNCTIONVT_OBJECTVT_BREAKVT_CONTINUEVT_RETURNVT_ERROR"
+const _ValueType_name = "VT_NILVT_BOOLEANVT_NUMBERVT_STRINGVT_FUNCTIONVT_OBJECTVT_ARRAYVT_BREAKVT_CONTINUEVT_RETURNVT_ERROR"
 
-var _ValueType_index = [...]uint8{0, 6, 16, 25, 34, 45, 54, 62, 73, 82, 90}
+var _ValueType_index = [...]uint8{0, 6, 16, 25, 34, 45, 54, 62, 70, 81, 90, 98}
 
 func (i ValueType) String() string {
 	i -= 1

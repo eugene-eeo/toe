@@ -4,10 +4,10 @@ package main
 
 import (
 	"fmt"
+	"github.com/chzyer/readline"
 	"os"
 	"strings"
 	"toe/eval"
-	"github.com/chzyer/readline"
 )
 
 var VERSION string

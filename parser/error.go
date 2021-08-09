@@ -42,7 +42,7 @@ func (p *Parser) expect(typ lexer.TokenType, s string, args ...interface{}) lexe
 // many errors as possible.
 func (p *Parser) synchronize() {
 	p.consume()
-	for (!p.isAtEnd()) {
+	for !p.isAtEnd() {
 		if p.previous().Type == lexer.SEMICOLON {
 			return
 		}

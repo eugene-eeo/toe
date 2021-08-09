@@ -115,7 +115,7 @@ func (ctx *Context) getSlot(obj Value, name string) Value {
 	return err
 }
 
-type hasObject interface { object() *Object }
+type hasObject interface{ object() *Object }
 
 func (o *Object) object() *Object { return o }
 

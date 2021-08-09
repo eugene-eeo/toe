@@ -48,7 +48,7 @@ let a = 1;
 	if g_ident.Loc != 0 {
 		t.Errorf("expected g to be 0, got=%d", g_ident.Loc)
 	}
-	if g_func.Name != "func_name"  {
+	if g_func.Name != "func_name" {
 		t.Errorf("expected g.func_name.Name=\"func_name\" got=%q", g_func.Name)
 	}
 	if a_inside_g.Loc != 3 {

@@ -358,7 +358,7 @@ func (p *Parser) grouping() Expr {
 
 func (p *Parser) assign(left Expr) Expr {
 	tok := p.consume()
-	right := p.precedence(PREC_ASSIGN-1)
+	right := p.precedence(PREC_ASSIGN - 1)
 	switch left := left.(type) {
 	case *Get:
 		return newSet(left.Object, left.Name, left.Bound, right)

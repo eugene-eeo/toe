@@ -7,15 +7,15 @@ import (
 )
 
 type Context struct {
-	// stack contains the current call stack. the idea is that
-	// we consult the call-stack to tell us which function we're
-	// in, and augment that using an expression's token.
+	// stack contains the current call stack. the idea is that we consult the
+	// call-stack to tell us which function we're in, and augment that using
+	// an expression's token.
 	stack []string
 	// the current environment and module we're executing.
 	env    *environment
 	module *parser.Module
-	// if we're in a user-defined function, what is the current
-	// object we're bound to -- we need this to implement super.
+	// if we're in a user-defined function, what is the current object we're
+	// bound to -- we need this to implement super.
 	this Value
 }
 

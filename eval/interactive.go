@@ -1,7 +1,6 @@
 package eval
 
 import (
-	"fmt"
 	"toe/lexer"
 	"toe/parser"
 	"toe/resolver"
@@ -24,18 +23,8 @@ func NewInteractiveContext() *InteractiveContext {
 	return &InteractiveContext{fn, ctx, res}
 }
 
-type Inspect interface { Inspect() string } 
-type Stringer interface { String() string } 
-
 func (ic *InteractiveContext) Inspect(v Value) string {
-	switch v := v.(type) {
-	case Inspect:
-		return v.Inspect()
-	case Stringer:
-		return v.String()
-	default:
-		panic(fmt.Sprintf("this is a bug -- encountered non-value type %#v", v))
-	}
+	return inspect(v)
 }
 
 func (ic *InteractiveContext) Run(input string) (Value, []error) {

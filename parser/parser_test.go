@@ -73,8 +73,8 @@ func TestParserValid(t *testing.T) {
 }
 
 func TestParserInvalid(t *testing.T) {
-	tests := []struct{
-		input string
+	tests := []struct {
+		input   string
 		numErrs int
 	}{
 		{"abcdef = 2", 1},

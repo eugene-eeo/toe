@@ -20,6 +20,7 @@ const (
 	VT_STRING
 	VT_FUNCTION
 	VT_OBJECT
+	VT_ARRAY
 	// Runtime Control
 	VT_BREAK
 	VT_CONTINUE
@@ -75,12 +76,25 @@ func newFunction(module *parser.Module, node *parser.Function, this Value, env *
 	return f
 }
 
+type Array struct {
+	*Object
+	values []Value
+}
+
+func newArray(values []Value) *Array {
+	return &Array{
+		Object: newObject(nil),
+		values: values,
+	}
+}
+
 func (v Nil) Type() ValueType       { return VT_NIL }
 func (v Boolean) Type() ValueType   { return VT_BOOLEAN }
 func (v Number) Type() ValueType    { return VT_NUMBER }
 func (v String) Type() ValueType    { return VT_STRING }
 func (v *Object) Type() ValueType   { return VT_OBJECT }
 func (v *Function) Type() ValueType { return VT_FUNCTION }
+func (v *Array) Type() ValueType    { return VT_ARRAY }
 
 func (v Nil) String() string { return "nil" }
 func (v Boolean) String() string {
@@ -91,6 +105,7 @@ func (v Boolean) String() string {
 }
 func (v Number) String() string { return strconv.FormatFloat(float64(v), 'g', -1, 64) }
 func (v String) String() string { return string(v) }
+
 func (v *Function) String() string {
 	name := v.node.Name
 	if name != "" {
@@ -102,6 +117,7 @@ func (v *Function) String() string {
 	}
 	return fmt.Sprintf("[Function%s%s]", isBound, name)
 }
+
 func (v *Object) String() string {
 	isFrozen := ""
 	if v.frozen {
@@ -110,7 +126,34 @@ func (v *Object) String() string {
 	return fmt.Sprintf("[Object %s%p]", isFrozen, v)
 }
 
+func (v *Array) String() string {
+	var buf bytes.Buffer
+	last_idx := len(v.values) - 1
+	buf.WriteString("[")
+	for i, x := range v.values {
+		buf.WriteString(inspect(x))
+		if i != last_idx {
+			buf.WriteString(", ")
+		}
+	}
+	buf.WriteString("]")
+	return buf.String()
+}
+
 func (v String) Inspect() string { return fmt.Sprintf("%q", string(v)) }
+
+type Inspect interface{ Inspect() string }
+type Stringer interface{ String() string }
+
+func inspect(v Value) string {
+	switch v := v.(type) {
+	case Inspect:
+		return v.Inspect()
+	case Stringer:
+		return v.String()
+	}
+	panic(fmt.Sprintf("cannot inspect %#v", v))
+}
 
 // ==========
 // Singletons

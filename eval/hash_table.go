@@ -77,6 +77,7 @@ func (v Number) Hash() Value {
 
 const (
 	ht_SIZE_HI      = 0.75 // When should we upsize?
+	ht_SIZE_LO      = 0.10 // When should we downsize?
 	ht_INITIAL_SIZE = 16
 )
 
@@ -136,30 +137,39 @@ func getNewHashTableSeed() uint64 {
 	return rv
 }
 
-func (ht *hashTable) resize() {
+func (ht *hashTable) resize(grow bool) {
+	newSize := len(ht.entries)
+	if grow {
+		newSize *= 2
+	} else {
+		newSize /= 2
+	}
 	oldEntries := ht.entries
 	ht.sz = 0
 	ht.realSz = 0
-	ht.entries = make([]htEntry, len(ht.entries)*2)
+	ht.entries = make([]htEntry, newSize)
 	ht.seed = getNewHashTableSeed()
 	mask := uint64(len(ht.entries) - 1)
 	for _, he := range oldEntries {
-		if he.key != nil {
-			// fast reinsert, using the .hash
-			idx := (he.hash ^ ht.seed) & mask
-			start := idx
-			for {
-				ref := &ht.entries[idx]
-				if ref.key == nil {
-					ht.sz++
-					ht.realSz++
-					*ref = he
-					break
-				}
-				idx = (idx + 1) & mask
-				if idx == start {
-					panic("wtf!")
-				}
+		if he.key == nil {
+			continue
+		}
+		// fast reinsert using .hash
+		idx := (he.hash ^ ht.seed) & mask
+		start := idx
+		for {
+			// Note: here we only have to care about whether a key
+			// was already set.
+			ref := &ht.entries[idx]
+			if ref.key == nil {
+				ht.sz++
+				ht.realSz++
+				*ref = he
+				break
+			}
+			idx = (idx + 1) & mask
+			if idx == start {
+				panic("wtf!")
 			}
 		}
 	}
@@ -235,6 +245,9 @@ func (ht *hashTable) delete(k Hashable) (found bool, err Value) {
 	entry.key = nil
 	entry.value = &TOMBSTONE
 	ht.realSz--
+	if float64(ht.realSz)/float64(len(ht.entries)) <= ht_SIZE_LO {
+		ht.resize(false)
+	}
 	return true, nil
 }
 
@@ -246,7 +259,7 @@ func (ht *hashTable) insert(k Hashable, v Value) (err Value) {
 		return err
 	}
 	if entry == nil {
-		ht.resize()
+		ht.resize(true)
 		return ht.insert(k, v)
 	}
 	if entry.key == nil {
@@ -259,7 +272,7 @@ func (ht *hashTable) insert(k Hashable, v Value) (err Value) {
 	entry.key = &k
 	entry.value = &v
 	if float64(ht.sz)/float64(len(ht.entries)) >= ht_SIZE_HI {
-		ht.resize()
+		ht.resize(true)
 	}
 	return nil
 }

@@ -65,6 +65,33 @@ func TestHashTable(t *testing.T) {
 	}
 }
 
+func TestHashTableKeyTypes(t *testing.T) {
+	pairs := []struct {
+		k Hashable
+		v Value
+	}{
+		{NIL, newObject(nil)},
+		{TRUE, newObject(nil)},
+		{FALSE, newObject(nil)},
+		{Number(1), newObject(nil)},
+		{Number(1.5), newObject(nil)},
+		{String("a"), newObject(nil)},
+		{String("b"), newObject(nil)},
+	}
+	ctx := NewContext()
+	ht := newHashTable(ctx)
+	for i, pair := range pairs {
+		mustInsert(t, ht, pair.k, pair.v)
+		v := mustGet(t, ht, pair.k)
+		if v != pair.v {
+			t.Fatalf("tests[%d] ht.get: expected=%p, got=%p", i, pair.v, v)
+		}
+		if got := ht.size(); got != uint64(i + 1) {
+			t.Fatalf("tests[%d] ht.size(): expected=%d, got=%d", i, i + 1, got)
+		}
+	}
+}
+
 func mustInsert(t *testing.T, ht *hashTable, k Hashable, v Value) {
 	if err := ht.insert(k, v); err != nil {
 		t.Fatalf("unexpected insertion error=%#v", err)
@@ -92,6 +119,21 @@ func mustDelete(t *testing.T, ht *hashTable, k Hashable) {
 	}
 }
 
+// ----------
+// Benchmarks
+// ----------
+
+func BenchmarkHashNil(b *testing.B) {
+	// this involves no resizes, so is a good test to see how fast
+	// the get and insert operations are.
+	ctx := NewContext()
+	ht := newHashTable(ctx)
+	for n := 0; n < b.N; n++ {
+		ht.insert(NIL, NIL)
+		ht.get(NIL)
+	}
+}
+
 func BenchmarkHashStrings(b *testing.B) {
 	ctx := NewContext()
 	ht := newHashTable(ctx)
@@ -99,6 +141,10 @@ func BenchmarkHashStrings(b *testing.B) {
 		v := String(fmt.Sprintf("key:%d", n))
 		ht.insert(v, nil)
 		ht.get(v)
+	}
+	for n := 0; n < b.N; n++ {
+		v := String(fmt.Sprintf("key:%d", n))
+		ht.delete(v)
 	}
 }
 
@@ -109,5 +155,8 @@ func BenchmarkHashNumbers(b *testing.B) {
 		v := Number(n)
 		ht.insert(v, nil)
 		ht.get(v)
+	}
+	for n := 0; n < b.N; n++ {
+		ht.delete(Number(n))
 	}
 }

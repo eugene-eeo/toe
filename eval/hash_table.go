@@ -143,6 +143,9 @@ func (ht *hashTable) resize(grow bool) {
 		newSize *= 2
 	} else {
 		newSize /= 2
+		if newSize < ht_INITIAL_SIZE {
+			newSize = ht_INITIAL_SIZE
+		}
 	}
 	oldEntries := ht.entries
 	ht.sz = 0
@@ -245,7 +248,7 @@ func (ht *hashTable) delete(k Hashable) (found bool, err Value) {
 	entry.key = nil
 	entry.value = &TOMBSTONE
 	ht.realSz--
-	if float64(ht.realSz)/float64(len(ht.entries)) <= ht_SIZE_LO {
+	if float64(ht.realSz)/float64(len(ht.entries)) <= ht_SIZE_LO && len(ht.entries) > ht_INITIAL_SIZE {
 		ht.resize(false)
 	}
 	return true, nil

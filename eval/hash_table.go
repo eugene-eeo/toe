@@ -23,6 +23,27 @@ type Hashable interface {
 	Hash() Value // this should return Number
 }
 
+var (
+	ht_NIL_HASH   = htHashConstant("nil")
+	ht_TRUE_HASH  = htHashConstant("true")
+	ht_FALSE_HASH = htHashConstant("false")
+)
+
+func htHashConstant(c string) Value {
+	h := fnv.New64a()
+	h.Write([]byte(c))
+	return Number(math.Float64frombits(h.Sum64()))
+}
+
+func (v Nil) Hash() Value { return ht_NIL_HASH }
+func (v Boolean) Hash() Value {
+	if v {
+		return ht_TRUE_HASH
+	} else {
+		return ht_FALSE_HASH
+	}
+}
+
 func (v String) Hash() Value {
 	h := fnv.New64a()
 	h.Write([]byte("S"))
@@ -50,10 +71,13 @@ func (v Number) Hash() Value {
 // =================
 // Actual hash table
 // =================
+//
+// The actual hash table is uses linear-probing. This is chosen primarily
+// because it is easy to implement -- performance be damned.
 
 const (
-	ht_INSERT_RESIZE_THRESHOLD = 0.75
-	ht_INITIAL_SIZE            = 16
+	ht_SIZE_HI      = 0.75 // When should we upsize?
+	ht_INITIAL_SIZE = 16
 )
 
 type htEntry struct {
@@ -188,7 +212,7 @@ func (ht *hashTable) delete(k Hashable) (found bool, err Value) {
 	if err != nil {
 		return false, err
 	}
-	if entry == nil || entry.isEmpty() {
+	if entry == nil || entry.isEmpty() || entry.isTombstone() {
 		return false, nil
 	}
 	entry.key = nil
@@ -206,14 +230,16 @@ func (ht *hashTable) insert(k Hashable, v Value) (err Value) {
 		ht.resize()
 		return ht.insert(k, v)
 	}
-	ht.realSz++
-	if entry.isEmpty() {
-		ht.sz++
+	if entry.key == nil {
+		ht.realSz++
+		if entry.value != &TOMBSTONE {
+			ht.sz++
+		}
 	}
 	entry.hash = hash
 	entry.key = &k
 	entry.value = &v
-	if float64(ht.sz)/float64(len(ht.entries)) >= ht_INSERT_RESIZE_THRESHOLD {
+	if float64(ht.sz)/float64(len(ht.entries)) >= ht_SIZE_HI {
 		ht.resize()
 	}
 	return nil

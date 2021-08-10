@@ -25,6 +25,7 @@ type Hashable interface {
 
 func (v String) Hash() Value {
 	h := fnv.New64a()
+	h.Write([]byte("S"))
 	h.Write([]byte(v))
 	return Number(math.Float64frombits(h.Sum64()))
 }
@@ -41,6 +42,7 @@ func (v Number) Hash() Value {
 	b[5] = (byte(floatbits >> 40 & 0xFF))
 	b[6] = (byte(floatbits >> 48 & 0xFF))
 	b[7] = (byte(floatbits >> 56 & 0xFF))
+	h.Write([]byte("N"))
 	h.Write(b[:])
 	return Number(math.Float64frombits(h.Sum64()))
 }
@@ -68,6 +70,7 @@ type hashTable struct {
 	entries []htEntry
 	seed    uint64 // seed
 	sz      uint64 // number of non-free entries in the hash table
+	realSz  uint64 // number of non-tombstone, and non-empty entries in the hash table
 }
 
 func newHashTable(ctx *Context) *hashTable {
@@ -112,6 +115,7 @@ func getNewHashTableSeed() uint64 {
 func (ht *hashTable) resize() {
 	oldEntries := ht.entries
 	ht.sz = 0
+	ht.realSz = 0
 	ht.entries = make([]htEntry, len(ht.entries)*2)
 	ht.seed = getNewHashTableSeed()
 	for _, he := range oldEntries {
@@ -164,18 +168,18 @@ func (ht *hashTable) getEntry(k Hashable) (entry *htEntry, hash uint64, err Valu
 
 // get finds the value associated with the given key in the hash table,
 // if any. the possible return types are:
-//   1. v == nil   (not found)
-//   2. v != nil   (found)
-//   3. isError(v) (error)
-func (ht *hashTable) get(k Hashable) (v Value) {
+//   1. v == nil && !found   (not found)
+//   2. v != nil && !found   (error)
+//   3. v != nil && found    (found)
+func (ht *hashTable) get(k Hashable) (v Value, found bool) {
 	entry, _, err := ht.getEntry(k)
 	if err != nil {
-		return err
+		return err, false
 	}
 	if entry == nil || entry.isEmpty() {
-		return nil
+		return nil, false
 	}
-	return *entry.value
+	return *entry.value, true
 }
 
 // delete deletes the given key from the table, if it exists.
@@ -189,6 +193,7 @@ func (ht *hashTable) delete(k Hashable) (found bool, err Value) {
 	}
 	entry.key = nil
 	entry.value = &TOMBSTONE
+	ht.realSz--
 	return true, nil
 }
 
@@ -201,6 +206,7 @@ func (ht *hashTable) insert(k Hashable, v Value) (err Value) {
 		ht.resize()
 		return ht.insert(k, v)
 	}
+	ht.realSz++
 	if entry.isEmpty() {
 		ht.sz++
 	}
@@ -211,4 +217,8 @@ func (ht *hashTable) insert(k Hashable, v Value) (err Value) {
 		ht.resize()
 	}
 	return nil
+}
+
+func (ht *hashTable) size() uint64 {
+	return ht.realSz
 }

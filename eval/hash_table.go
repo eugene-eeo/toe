@@ -154,27 +154,28 @@ func (ht *hashTable) resize() {
 //
 //   - entry != nil && err == nil   (empty entry / a matching entry)
 //   - entry == nil && err != nil   (error)
-func (ht *hashTable) getEntry(k Hashable) (entry *htEntry, hash uint64, err Value) {
+func (ht *hashTable) getEntry(k Hashable, forInsert bool) (entry *htEntry, hash uint64, err Value) {
 	hash, err = ht.hash(k)
 	if err != nil {
 		return nil, hash, err
 	}
 	size := uint64(len(ht.entries))
 	mask := size - 1
-	seeded_hash := hash ^ ht.seed
-	for i := uint64(0); i < size; i++ {
-		ref := &ht.entries[(seeded_hash+i)&mask]
+	idx := (hash ^ ht.seed) & mask
+	start := idx
+	for {
+		ref := &ht.entries[idx]
 		if ref.isTombstone() {
-			// have to keep probing.
-			continue
-		}
-		if ref.isEmpty() {
+			// tombstone ==> continue probing, unless we need to insert
+			if forInsert {
+				return ref, hash, nil
+			}
+		} else if ref.isEmpty() {
+			// empty entry ==> we can break the search chain
 			return ref, hash, nil
-		}
-		// first check for a match on the hash...
-		if ref.hash == hash {
+		} else if ref.hash == hash {
+			// potential match ==> go through the motions...
 			key := *ref.key
-			// fast case
 			if key == k {
 				return ref, hash, nil
 			}
@@ -186,33 +187,33 @@ func (ht *hashTable) getEntry(k Hashable) (entry *htEntry, hash uint64, err Valu
 				return ref, hash, nil
 			}
 		}
+		idx = (idx + 1) & mask
+		if idx == start {
+			break
+		}
 	}
 	return nil, hash, nil
 }
 
-// get finds the value associated with the given key in the hash table,
-// if any. the possible return types are:
-//   1. v == nil && !found   (not found)
-//   2. v != nil && !found   (error)
-//   3. v != nil && found    (found)
-func (ht *hashTable) get(k Hashable) (v Value, found bool) {
-	entry, _, err := ht.getEntry(k)
+// get finds the value associated with the given key in the hash table, if any.
+func (ht *hashTable) get(k Hashable) (v Value, found bool, err Value) {
+	entry, _, err := ht.getEntry(k, false)
 	if err != nil {
-		return err, false
+		return nil, false, err
 	}
 	if entry == nil || entry.isEmpty() {
-		return nil, false
+		return nil, false, nil
 	}
-	return *entry.value, true
+	return *entry.value, true, nil
 }
 
 // delete deletes the given key from the table, if it exists.
 func (ht *hashTable) delete(k Hashable) (found bool, err Value) {
-	entry, _, err := ht.getEntry(k)
+	entry, _, err := ht.getEntry(k, false)
 	if err != nil {
 		return false, err
 	}
-	if entry == nil || entry.isEmpty() || entry.isTombstone() {
+	if entry == nil || entry.isEmpty() {
 		return false, nil
 	}
 	entry.key = nil
@@ -221,8 +222,10 @@ func (ht *hashTable) delete(k Hashable) (found bool, err Value) {
 	return true, nil
 }
 
+// insert inserts the given pair into the hash table.
+// on a successful insert, err == nil.
 func (ht *hashTable) insert(k Hashable, v Value) (err Value) {
-	entry, hash, err := ht.getEntry(k)
+	entry, hash, err := ht.getEntry(k, true)
 	if err != nil {
 		return err
 	}

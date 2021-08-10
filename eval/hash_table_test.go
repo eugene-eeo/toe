@@ -47,12 +47,15 @@ func TestHashTable(t *testing.T) {
 		if ht.size() != uint64(100-(i+1)) {
 			t.Fatalf("expected ht.size()=%d, got=%d", 100-(i+1), ht.size())
 		}
-		u, found := ht.get(k)
+		value, found, err := ht.get(k)
+		if err != nil {
+			t.Fatalf("expected err == nil, got=%#v", err)
+		}
 		if found {
 			t.Fatalf("expected key=%#v to not be in hash table", k)
 		}
-		if u != nil {
-			t.Fatalf("expected value == nil, got=%#v", u)
+		if value != nil {
+			t.Fatalf("expected value == nil, got=%#v", err)
 		}
 		mustInsert(t, ht, k, NIL)
 		if ht.size() != uint64(100-i) {
@@ -69,11 +72,11 @@ func mustInsert(t *testing.T, ht *hashTable, k Hashable, v Value) {
 }
 
 func mustGet(t *testing.T, ht *hashTable, k Hashable) Value {
-	value, found := ht.get(k)
+	value, found, err := ht.get(k)
 	if !found {
 		t.Fatalf("expected key %#v to be in hash table", k)
 	}
-	if isError(value) {
+	if err != nil {
 		t.Fatalf("unexpected get error=%#v", value)
 	}
 	return value

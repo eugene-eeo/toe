@@ -86,8 +86,8 @@ func TestHashTableKeyTypes(t *testing.T) {
 		if v != pair.v {
 			t.Fatalf("tests[%d] ht.get: expected=%p, got=%p", i, pair.v, v)
 		}
-		if got := ht.size(); got != uint64(i + 1) {
-			t.Fatalf("tests[%d] ht.size(): expected=%d, got=%d", i, i + 1, got)
+		if got := ht.size(); got != uint64(i+1) {
+			t.Fatalf("tests[%d] ht.size(): expected=%d, got=%d", i, i+1, got)
 		}
 	}
 }
@@ -119,6 +119,23 @@ func mustDelete(t *testing.T, ht *hashTable, k Hashable) {
 	}
 }
 
+func TestShrink(t *testing.T) {
+	ctx := NewContext()
+	ht := newHashTable(ctx)
+	for n := 0; n < 50*1000; n++ {
+		ht.insert(Number(n), nil)
+	}
+	for n := 0; n < 50*1000; n++ {
+		ht.delete(Number(n))
+		if ht.size() != 50*1000-uint64(n+1) {
+			t.Fatalf("invalid ht.size(): expected=%d, got=%d",
+				50*1000-uint64(n+1),
+				ht.size(),
+			)
+		}
+	}
+}
+
 // ----------
 // Benchmarks
 // ----------
@@ -142,10 +159,6 @@ func BenchmarkHashStrings(b *testing.B) {
 		ht.insert(v, nil)
 		ht.get(v)
 	}
-	for n := 0; n < b.N; n++ {
-		v := String(fmt.Sprintf("key:%d", n))
-		ht.delete(v)
-	}
 }
 
 func BenchmarkHashNumbers(b *testing.B) {
@@ -155,8 +168,5 @@ func BenchmarkHashNumbers(b *testing.B) {
 		v := Number(n)
 		ht.insert(v, nil)
 		ht.get(v)
-	}
-	for n := 0; n < b.N; n++ {
-		ht.delete(Number(n))
 	}
 }

@@ -29,28 +29,54 @@ func (v String) Hash() Value {
 	return Number(math.Float64frombits(h.Sum64()))
 }
 
-// so we can store tombstones
-func (v tombstone) Hash() Value { return NIL }
+func (v Number) Hash() Value {
+	h := fnv.New64a()
+	floatbits := math.Float64bits(float64(v))
+	var b [8]byte
+	b[0] = (byte(floatbits & 0xFF))
+	b[1] = (byte(floatbits >> 8 & 0xFF))
+	b[2] = (byte(floatbits >> 16 & 0xFF))
+	b[3] = (byte(floatbits >> 24 & 0xFF))
+	b[4] = (byte(floatbits >> 32 & 0xFF))
+	b[5] = (byte(floatbits >> 40 & 0xFF))
+	b[6] = (byte(floatbits >> 48 & 0xFF))
+	b[7] = (byte(floatbits >> 56 & 0xFF))
+	h.Write(b[:])
+	return Number(math.Float64frombits(h.Sum64()))
+}
 
 // =================
 // Actual hash table
 // =================
 
+const (
+	ht_INSERT_RESIZE_THRESHOLD = 0.75
+	ht_INITIAL_SIZE            = 16
+)
+
 type htEntry struct {
-	key   Hashable
 	hash  uint64
-	value Value
+	key   *Hashable
+	value *Value
 }
 
-func (he htEntry) isTombstone() bool { return he.key == TOMBSTONE }
-func (he htEntry) isEmpty() bool     { return he.key == nil }
-func (he htEntry) isFree() bool      { return he.isEmpty() || he.isTombstone() }
+func (he htEntry) isTombstone() bool { return he.key == nil && he.value == &TOMBSTONE }
+func (he htEntry) isEmpty() bool     { return he.key == nil && he.value == nil }
 
 type hashTable struct {
 	ctx     *Context
 	entries []htEntry
 	seed    uint64 // seed
 	sz      uint64 // number of non-free entries in the hash table
+}
+
+func newHashTable(ctx *Context) *hashTable {
+	return &hashTable{
+		ctx:     ctx,
+		entries: make([]htEntry, ht_INITIAL_SIZE),
+		seed:    getNewHashTableSeed(),
+		sz:      0,
+	}
 }
 
 // hash tries to hash the given object -- if its hash method
@@ -66,8 +92,6 @@ func (ht *hashTable) hash(k Hashable) (h uint64, err Value) {
 			rv.Type())))
 	}
 	h = math.Float64bits(float64(rv.(Number)))
-	h ^= ht.seed
-	h &= ht.sz - 1
 	return h, nil
 }
 
@@ -75,58 +99,67 @@ func getNewHashTableSeed() uint64 {
 	var b [8]byte
 	rand.Read(b[:])
 	rv := uint64(b[0])
-	rv = rv<<8 + uint64(b[1])
-	rv = rv<<8 + uint64(b[2])
-	rv = rv<<8 + uint64(b[3])
-	rv = rv<<8 + uint64(b[4])
-	rv = rv<<8 + uint64(b[5])
-	rv = rv<<8 + uint64(b[6])
-	rv = rv<<8 + uint64(b[7])
+	rv = (rv << 8) + uint64(b[1])
+	rv = (rv << 8) + uint64(b[2])
+	rv = (rv << 8) + uint64(b[3])
+	rv = (rv << 8) + uint64(b[4])
+	rv = (rv << 8) + uint64(b[5])
+	rv = (rv << 8) + uint64(b[6])
+	rv = (rv << 8) + uint64(b[7])
 	return rv
 }
 
 func (ht *hashTable) resize() {
 	oldEntries := ht.entries
-	ht.sz *= 2
-	ht.entries = make([]htEntry, ht.sz)
+	ht.sz = 0
+	ht.entries = make([]htEntry, len(ht.entries)*2)
 	ht.seed = getNewHashTableSeed()
-	for _, entry := range oldEntries {
-		ht.insert(entry.key, entry.value)
+	for _, he := range oldEntries {
+		if he.key != nil {
+			ht.insert(*he.key, *he.value)
+		}
 	}
 }
 
 // getEntry returns the htEntry (NOT the value) associated with
 // k in the hash table, if any. The possible return values are:
-//   - entry != nil                 (in table)
-//   - entry == nil && err == nil   (not in table)
+//
+//   - entry != nil && err == nil   (empty entry / a matching entry)
 //   - entry == nil && err != nil   (error)
-func (ht *hashTable) getEntry(k Hashable) (entry *htEntry, err Value) {
-	mask := uint64(len(ht.entries) - 1)
-	hash, err := ht.hash(k)
+func (ht *hashTable) getEntry(k Hashable) (entry *htEntry, hash uint64, err Value) {
+	hash, err = ht.hash(k)
 	if err != nil {
-		return nil, err
+		return nil, hash, err
 	}
-	for i := uint64(0); i < ht.sz; i++ {
-		j := (hash + i) & mask
-		ref := &ht.entries[j]
-		if ref.isEmpty() {
-			break
-		}
+	size := uint64(len(ht.entries))
+	mask := size - 1
+	seeded_hash := hash ^ ht.seed
+	for i := uint64(0); i < size; i++ {
+		ref := &ht.entries[(seeded_hash+i)&mask]
 		if ref.isTombstone() {
+			// have to keep probing.
 			continue
+		}
+		if ref.isEmpty() {
+			return ref, hash, nil
 		}
 		// first check for a match on the hash...
 		if ref.hash == hash {
-			cmp_res := ht.ctx.binary(lexer.EQUAL_EQUAL, ref.key.(Value), k.(Value))
+			key := *ref.key
+			// fast case
+			if key == k {
+				return ref, hash, nil
+			}
+			cmp_res := ht.ctx.binary(lexer.EQUAL_EQUAL, key.(Value), k.(Value))
 			if isError(cmp_res) {
-				return nil, cmp_res
+				return nil, hash, cmp_res
 			}
 			if isTruthy(cmp_res) {
-				return ref, nil
+				return ref, hash, nil
 			}
 		}
 	}
-	return nil, nil
+	return nil, hash, nil
 }
 
 // get finds the value associated with the given key in the hash table,
@@ -135,38 +168,47 @@ func (ht *hashTable) getEntry(k Hashable) (entry *htEntry, err Value) {
 //   2. v != nil   (found)
 //   3. isError(v) (error)
 func (ht *hashTable) get(k Hashable) (v Value) {
-	entry, err := ht.getEntry(k)
+	entry, _, err := ht.getEntry(k)
+	if err != nil {
+		return err
+	}
+	if entry == nil || entry.isEmpty() {
+		return nil
+	}
+	return *entry.value
+}
+
+// delete deletes the given key from the table, if it exists.
+func (ht *hashTable) delete(k Hashable) (found bool, err Value) {
+	entry, _, err := ht.getEntry(k)
+	if err != nil {
+		return false, err
+	}
+	if entry == nil || entry.isEmpty() {
+		return false, nil
+	}
+	entry.key = nil
+	entry.value = &TOMBSTONE
+	return true, nil
+}
+
+func (ht *hashTable) insert(k Hashable, v Value) (err Value) {
+	entry, hash, err := ht.getEntry(k)
 	if err != nil {
 		return err
 	}
 	if entry == nil {
-		return nil
+		ht.resize()
+		return ht.insert(k, v)
 	}
-	return entry.value
-}
-
-func (ht *hashTable) insert(k Hashable, v Value) (err Value) {
-	// calculate hash
-	mask := uint64(len(ht.entries) - 1)
-	hash, err := ht.hash(k)
-	if err != nil {
-		return err
+	if entry.isEmpty() {
+		ht.sz++
 	}
-	// now start the probe sequence.
-	for i := uint64(0); i < ht.sz; i++ {
-		j := (hash + i) & mask
-		if ht.entries[j].isFree() {
-			ref := &ht.entries[j]
-			if ref.isEmpty() {
-				ht.sz++
-			}
-			ref.key = k
-			ref.hash = hash
-			ref.value = v
-			return nil
-		}
+	entry.hash = hash
+	entry.key = &k
+	entry.value = &v
+	if float64(ht.sz)/float64(len(ht.entries)) >= ht_INSERT_RESIZE_THRESHOLD {
+		ht.resize()
 	}
-	// resize, and re-insert.
-	ht.resize()
-	return ht.insert(k, v)
+	return nil
 }

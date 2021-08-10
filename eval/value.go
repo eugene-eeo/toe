@@ -161,7 +161,7 @@ var (
 	FALSE     = Boolean(false)
 	BREAK     = Break{}
 	CONTINUE  = Continue{}
-	TOMBSTONE = tombstone{}
+	TOMBSTONE = Value(tombstone{})
 )
 
 // ===============

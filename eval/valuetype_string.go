@@ -19,11 +19,12 @@ func _() {
 	_ = x[VT_CONTINUE-9]
 	_ = x[VT_RETURN-10]
 	_ = x[VT_ERROR-11]
+	_ = x[VT_TOMBSTONE-12]
 }
 
-const _ValueType_name = "VT_NILVT_BOOLEANVT_NUMBERVT_STRINGVT_FUNCTIONVT_OBJECTVT_ARRAYVT_BREAKVT_CONTINUEVT_RETURNVT_ERROR"
+const _ValueType_name = "VT_NILVT_BOOLEANVT_NUMBERVT_STRINGVT_FUNCTIONVT_OBJECTVT_ARRAYVT_BREAKVT_CONTINUEVT_RETURNVT_ERRORVT_TOMBSTONE"
 
-var _ValueType_index = [...]uint8{0, 6, 16, 25, 34, 45, 54, 62, 70, 81, 90, 98}
+var _ValueType_index = [...]uint8{0, 6, 16, 25, 34, 45, 54, 62, 70, 81, 90, 98, 110}
 
 func (i ValueType) String() string {
 	i -= 1

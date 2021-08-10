@@ -76,9 +76,9 @@ func (v Number) Hash() Value {
 // because it is easy to implement -- performance be damned.
 
 const (
-	ht_SIZE_HI      = 0.75 // When should we upsize?
-	ht_SIZE_LO      = 0.10 // When should we downsize?
-	ht_INITIAL_SIZE = 16
+	ht_SIZE_HI  = 0.75 // When should we upsize?
+	ht_SIZE_LO  = 0.10 // When should we downsize?
+	ht_MIN_SIZE = 16
 )
 
 type htEntry struct {
@@ -101,7 +101,7 @@ type hashTable struct {
 func newHashTable(ctx *Context) *hashTable {
 	return &hashTable{
 		ctx:     ctx,
-		entries: make([]htEntry, ht_INITIAL_SIZE),
+		entries: make([]htEntry, ht_MIN_SIZE),
 		seed:    getNewHashTableSeed(),
 		sz:      0,
 	}
@@ -137,15 +137,21 @@ func getNewHashTableSeed() uint64 {
 	return rv
 }
 
+func (ht *hashTable) maybeResize() {
+	entries := float64(len(ht.entries))
+	if float64(ht.sz)/entries >= ht_SIZE_HI {
+		ht.resize(true)
+	} else if entries > ht_MIN_SIZE && float64(ht.realSz)/entries <= ht_SIZE_LO {
+		ht.resize(false)
+	}
+}
+
 func (ht *hashTable) resize(grow bool) {
 	newSize := len(ht.entries)
 	if grow {
 		newSize *= 2
 	} else {
 		newSize /= 2
-		if newSize < ht_INITIAL_SIZE {
-			newSize = ht_INITIAL_SIZE
-		}
 	}
 	oldEntries := ht.entries
 	ht.sz = 0
@@ -179,7 +185,9 @@ func (ht *hashTable) resize(grow bool) {
 }
 
 // getEntry returns the htEntry (NOT the value) associated with
-// k in the hash table, if any. The possible return values are:
+// k in the hash table, if any. If forInsert is set to true, then
+// any tombstones in the chain will be returned; otherwise getEntry
+// will _never_ return a tombstone. The possible return values are:
 //
 //   - entry != nil && err == nil   (empty entry / a matching entry)
 //   - entry == nil && err != nil   (error)
@@ -248,9 +256,7 @@ func (ht *hashTable) delete(k Hashable) (found bool, err Value) {
 	entry.key = nil
 	entry.value = &TOMBSTONE
 	ht.realSz--
-	if float64(ht.realSz)/float64(len(ht.entries)) <= ht_SIZE_LO && len(ht.entries) > ht_INITIAL_SIZE {
-		ht.resize(false)
-	}
+	ht.maybeResize()
 	return true, nil
 }
 
@@ -274,9 +280,7 @@ func (ht *hashTable) insert(k Hashable, v Value) (err Value) {
 	entry.hash = hash
 	entry.key = &k
 	entry.value = &v
-	if float64(ht.sz)/float64(len(ht.entries)) >= ht_SIZE_HI {
-		ht.resize(true)
-	}
+	ht.maybeResize()
 	return nil
 }
 

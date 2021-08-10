@@ -142,9 +142,25 @@ func (ht *hashTable) resize() {
 	ht.realSz = 0
 	ht.entries = make([]htEntry, len(ht.entries)*2)
 	ht.seed = getNewHashTableSeed()
+	mask := uint64(len(ht.entries) - 1)
 	for _, he := range oldEntries {
 		if he.key != nil {
-			ht.insert(*he.key, *he.value)
+			// fast reinsert, using the .hash
+			idx := (he.hash ^ ht.seed) & mask
+			start := idx
+			for {
+				ref := &ht.entries[idx]
+				if ref.key == nil {
+					ht.sz++
+					ht.realSz++
+					*ref = he
+					break
+				}
+				idx = (idx + 1) & mask
+				if idx == start {
+					panic("wtf!")
+				}
+			}
 		}
 	}
 }
@@ -189,10 +205,10 @@ func (ht *hashTable) getEntry(k Hashable, forInsert bool) (entry *htEntry, hash 
 		}
 		idx = (idx + 1) & mask
 		if idx == start {
-			break
+			// table is full
+			return nil, hash, nil
 		}
 	}
-	return nil, hash, nil
 }
 
 // get finds the value associated with the given key in the hash table, if any.

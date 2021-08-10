@@ -5,8 +5,6 @@ import (
 	"strings"
 )
 
-// TODO: find out some way we could automate this.
-
 func (node *Module) String() string {
 	stmts := make([]string, len(node.Stmts))
 	for i, stmt := range node.Stmts {
@@ -195,6 +193,18 @@ func (node *Call) String() string {
 
 func (node *Identifier) String() string { return node.Id.Lexeme }
 func (node *Literal) String() string    { return node.Lit.Lexeme }
+
+func (node *Array) String() string {
+	var buf bytes.Buffer
+	exprs := make([]string, len(node.Exprs))
+	for i, expr := range node.Exprs {
+		exprs[i] = expr.String()
+	}
+	buf.WriteString("[")
+	buf.WriteString(strings.Join(exprs, ", "))
+	buf.WriteString("]")
+	return buf.String()
+}
 
 func (node *Function) String() string {
 	var buf bytes.Buffer

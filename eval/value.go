@@ -26,6 +26,8 @@ const (
 	VT_CONTINUE
 	VT_RETURN
 	VT_ERROR
+	// Hashtable -- tombstones
+	VT_TOMBSTONE
 )
 
 type Value interface {
@@ -42,16 +44,14 @@ type Number float64
 type String string
 
 type Object struct {
-	frozen bool // whether this object is mutable
-	proto  Value
-	slots  map[string]Value
+	proto Value
+	slots map[string]Value
 }
 
 func newObject(proto Value) *Object {
 	return &Object{
-		frozen: false,
-		proto:  proto,
-		slots:  map[string]Value{},
+		proto: proto,
+		slots: map[string]Value{},
 	}
 }
 
@@ -119,11 +119,7 @@ func (v *Function) String() string {
 }
 
 func (v *Object) String() string {
-	isFrozen := ""
-	if v.frozen {
-		isFrozen = "frozen "
-	}
-	return fmt.Sprintf("[Object %s%p]", isFrozen, v)
+	return fmt.Sprintf("[Object %p]", v)
 }
 
 func (v *Array) String() string {
@@ -160,11 +156,12 @@ func inspect(v Value) string {
 // ==========
 
 var (
-	NIL      = Nil{}
-	TRUE     = Boolean(true)
-	FALSE    = Boolean(false)
-	BREAK    = Break{}
-	CONTINUE = Continue{}
+	NIL       = Nil{}
+	TRUE      = Boolean(true)
+	FALSE     = Boolean(false)
+	BREAK     = Break{}
+	CONTINUE  = Continue{}
+	TOMBSTONE = tombstone{}
 )
 
 // ===============
@@ -213,3 +210,11 @@ func (v Break) Type() ValueType    { return VT_BREAK }
 func (v Continue) Type() ValueType { return VT_CONTINUE }
 func (v Return) Type() ValueType   { return VT_RETURN }
 func (v Error) Type() ValueType    { return VT_ERROR }
+
+// ====================
+// Hash table tombstone
+// ====================
+
+type tombstone struct{}
+
+func (v tombstone) Type() ValueType { return VT_TOMBSTONE }

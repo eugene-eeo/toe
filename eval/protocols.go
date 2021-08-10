@@ -26,23 +26,37 @@ type Iterator interface {
 }
 
 type StringIterator struct {
-	err bool
-	i   int
-	s   String
+	i int
+	s String
 }
 
 func (si *StringIterator) Close() Value { return NIL }
-func (si *StringIterator) Done() Value  { return Boolean(si.err || si.i >= len(si.s)) }
+func (si *StringIterator) Done() Value  { return Boolean(si.i >= len(si.s)) }
 func (si *StringIterator) Next() Value {
 	r, w := utf8.DecodeRuneInString(string(si.s)[si.i:])
 	si.i += w
 	return String(r)
 }
 
+type ArrayIterator struct {
+	i int
+	a *Array
+}
+
+func (ai *ArrayIterator) Close() Value { return NIL }
+func (ai *ArrayIterator) Done() Value  { return Boolean(ai.i >= len(ai.a.values)) }
+func (ai *ArrayIterator) Next() Value {
+	rv := ai.a.values[ai.i]
+	ai.i++
+	return rv
+}
+
 func getIterator(v Value) (Iterator, bool) {
 	switch v := v.(type) {
 	case String:
 		return &StringIterator{s: v}, true
+	case *Array:
+		return &ArrayIterator{a: v}, true
 	}
 	return nil, false
 }
@@ -126,10 +140,6 @@ func (o *Object) object() *Object { return o }
 func (ctx *Context) setSlot(obj Value, name string, val Value) Value {
 	if obj_ho, ok := obj.(hasObject); ok {
 		oo := obj_ho.object()
-		if oo.frozen {
-			err := newError(String(fmt.Sprintf("attempt to set slot %q on frozen object", name)))
-			return err
-		}
 		oo.slots[name] = val
 		return val
 	}
@@ -198,35 +208,33 @@ func (f *Function) Call(ctx *Context, args []Value) Value {
 // =========
 
 func (ctx *Context) binary(op lexer.TokenType, left, right Value) Value {
+	// Fast case: note that this also handles pairs of VT_{NUMBER,STRING}.
 	if op == lexer.EQUAL_EQUAL && left == right {
 		return TRUE
 	}
 	if op == lexer.BANG_EQUAL && left != right {
 		return TRUE
 	}
-	switch {
-	case op == lexer.EQUAL_EQUAL:
-		return Boolean(left == right)
-	case op == lexer.BANG_EQUAL:
-		return Boolean(left != right)
-	case left.Type() == VT_NUMBER && right.Type() == VT_NUMBER:
-		rv := numberBinaryOp(op, left.(Number), right.(Number))
-		if rv != nil {
-			return rv
-		}
-	case left.Type() == VT_STRING && right.Type() == VT_STRING:
-		rv := stringBinaryOp(op, left.(String), right.(String))
+	// Search the operator table.
+	info := binOpInfo{op, left.Type(), right.Type()}
+	if impl, ok := binOpTable[info]; ok {
+		rv := impl(left, right)
 		if rv != nil {
 			return rv
 		}
 	}
-	err := newError(String(fmt.Sprintf(
-		"unsupported operands for %q: %s and %s",
-		op.String(),
-		left.Type().String(),
-		right.Type().String(),
-	)))
-	return err
+	// Fallback for == and !=: if they were truly equal (or not equal), we would
+	// have caught those earlier; thus we return false here.
+	if op == lexer.EQUAL_EQUAL || op == lexer.BANG_EQUAL {
+		return FALSE
+	} else {
+		return newError(String(fmt.Sprintf(
+			"unsupported operands for %q: %s and %s",
+			op.String(),
+			left.Type().String(),
+			right.Type().String(),
+		)))
+	}
 }
 
 func (ctx *Context) unary(op lexer.TokenType, right Value) Value {
@@ -242,4 +250,20 @@ func (ctx *Context) unary(op lexer.TokenType, right Value) Value {
 		right.Type().String(),
 	)))
 	return err
+}
+
+// =========
+// Utilities
+// =========
+
+// bind_and_call is a utility method to call $obj.$name, binding
+// it at the same time -- this can be used as the base for future
+// protocols (e.g. object iter).
+func (ctx *Context) bind_and_call(obj Value, name string, args []Value) Value {
+	fn := ctx.getSlot(obj, name)
+	if isError(fn) {
+		return fn
+	}
+	fn = ctx.bind(obj, fn)
+	return ctx.call(fn, args)
 }

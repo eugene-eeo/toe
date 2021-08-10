@@ -131,6 +131,7 @@ if __name__ == '__main__':
             Struct('Call',       ['Callee Expr', 'LParen lexer.Token', 'Args []Expr']),
             Struct('Identifier', ['Id lexer.Token'], extra_fields=['Loc int']),
             Struct('Literal',    ['Lit lexer.Token']),
+            Struct('Array',      ['Exprs []Expr']),
             Struct('Function',   ['Fn lexer.Token', 'Params []lexer.Token', 'Body *Block'], extra_fields=['Name string']),
             Struct('Super',      ['Tok lexer.Token', 'Name lexer.Token', 'Bound bool']),
         ],

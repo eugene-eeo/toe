@@ -6,6 +6,10 @@ import (
 	"toe/parser"
 )
 
+func init() {
+	initBinOpTable()
+}
+
 type Context struct {
 	// stack contains the current call stack. the idea is that we consult the
 	// call-stack to tell us which function we're in, and augment that using
@@ -88,6 +92,8 @@ func (ctx *Context) EvalExpr(node parser.Expr) Value {
 		case lexer.FALSE:
 			return FALSE
 		}
+	case *parser.Array:
+		return ctx.evalArray(node)
 	case *parser.Function:
 		return ctx.evalFunction(node)
 	case *parser.Super:
@@ -350,6 +356,18 @@ func (ctx *Context) evalIdentifier(node *parser.Identifier) Value {
 		return ctx.addErrorStack(e, node.Id)
 	}
 	return value
+}
+
+func (ctx *Context) evalArray(node *parser.Array) Value {
+	values := make([]Value, len(node.Exprs))
+	for i, expr := range node.Exprs {
+		val := ctx.EvalExpr(expr)
+		if isError(val) {
+			return val
+		}
+		values[i] = val
+	}
+	return newArray(values)
 }
 
 func (ctx *Context) evalFunction(node *parser.Function) Value {

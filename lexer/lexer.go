@@ -18,6 +18,8 @@ const (
 	RIGHT_PAREN
 	LEFT_BRACE
 	RIGHT_BRACE
+	LEFT_BRACKET  // '['
+	RIGHT_BRACKET // ']'
 	COMMA
 	COLON
 	DOT
@@ -207,6 +209,10 @@ func (l *Lexer) scanToken() {
 		l.emit(COLON)
 	case ';':
 		l.emit(SEMICOLON)
+	case '[':
+		l.emit(LEFT_BRACKET)
+	case ']':
+		l.emit(RIGHT_BRACKET)
 	case '(':
 		l.emit(LEFT_PAREN)
 	case ')':

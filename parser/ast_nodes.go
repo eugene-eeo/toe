@@ -293,6 +293,18 @@ func newLiteral(Lit lexer.Token) *Literal {
 func (node *Literal) node() {}
 func (node *Literal) expr() {}
 
+type Array struct {
+	Exprs []Expr
+}
+
+func newArray(Exprs []Expr) *Array {
+	return &Array{
+		Exprs: Exprs,
+	}
+}
+func (node *Array) node() {}
+func (node *Array) expr() {}
+
 type Function struct {
 	Fn     lexer.Token
 	Params []lexer.Token

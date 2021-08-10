@@ -47,6 +47,9 @@ func TestParserValid(t *testing.T) {
 		{"isEven.call(n)->this.that;", "((((isEven.call)(n))->this).that);"},
 		{"super->a(123);", "((super->a)(123));"},
 		{"super.a.b(123);", "(((super.a).b)(123));"},
+		{"[1,nil,true,false,[1,3,4]].x;", "([1, nil, true, false, [1, 3, 4]].x);"},
+		{"[1+2,];", "[(1 + 2)];"},
+		{"[1];", "[1];"},
 	}
 	for i, test := range tests {
 		var tokens []lexer.Token
@@ -88,6 +91,8 @@ func TestParserInvalid(t *testing.T) {
 		{"fn(x,,){}", 1},
 		{"fn(,){}", 1},
 		{"z(1,2,3,,);", 1},
+		{"f(1,", 1},
+		{"[1,2,3,,]", 1},
 	}
 	for i, test := range tests {
 		var tokens []lexer.Token

@@ -1,6 +1,6 @@
 COMMIT = $(shell git rev-list -1 HEAD)
 
-build:
+generate:
 	python ./tool/make_ast.py
 	go generate ./...
 	go build ./...

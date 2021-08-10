@@ -41,17 +41,18 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		curr:     0,
 	}
 	p.unaryParsers = map[lexer.TokenType]unaryParser{
-		lexer.LEFT_PAREN: p.grouping,
-		lexer.IDENTIFIER: p.identifier,
-		lexer.NUMBER:     p.literal,
-		lexer.STRING:     p.literal,
-		lexer.TRUE:       p.literal,
-		lexer.FALSE:      p.literal,
-		lexer.NIL:        p.literal,
-		lexer.BANG:       p.unary,
-		lexer.MINUS:      p.unary,
-		lexer.FN:         p.function,
-		lexer.SUPER:      p.super,
+		lexer.LEFT_PAREN:   p.grouping,
+		lexer.IDENTIFIER:   p.identifier,
+		lexer.NUMBER:       p.literal,
+		lexer.STRING:       p.literal,
+		lexer.TRUE:         p.literal,
+		lexer.FALSE:        p.literal,
+		lexer.NIL:          p.literal,
+		lexer.BANG:         p.unary,
+		lexer.MINUS:        p.unary,
+		lexer.LEFT_BRACKET: p.array,
+		lexer.FN:           p.function,
+		lexer.SUPER:        p.super,
 	}
 	// note: need to make sure that every entry in binaryParsers
 	// has a corresponding entry in precedences.
@@ -90,6 +91,7 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.DOT:           PREC_CALL,
 		lexer.MINUS_GREATER: PREC_CALL,
 		lexer.LEFT_PAREN:    PREC_CALL,
+		lexer.LEFT_BRACKET:  PREC_CALL,
 	}
 	return p
 }
@@ -318,9 +320,10 @@ func (p *Parser) exprStmt() Stmt {
 // get      → expression ( "." | "->" ) ( IDENTIFIER | "nil" | "true" | "false" )
 // call     → expression "(" args ")"
 // args     → expression ( "," args )? | ε
-// literal  → STRING | IDENTIFIER | NUMBER | TRUE | FALSE | NIL | func
+// literal  → STRING | IDENTIFIER | NUMBER | TRUE | FALSE | NIL | function | array
 // function → "fn" "(" params ")" block
 // params   → IDENTIFIER ( "," params )? | ε
+// array    → "[" args "]"
 // super    → "super" "." IDENTIFIER
 
 // expression matches a single expression.
@@ -371,13 +374,13 @@ func (p *Parser) assign(left Expr) Expr {
 }
 
 func (p *Parser) get(left Expr) Expr {
-	// Be careful that are two kinds of attribute accesses.
+	// Be careful that are two kinds of slot accesses.
 	// The typical syntax defaults to `binding' mode, since most of the
 	// time I expect that users would want to set callbacks; moreover
 	// this makes the syntax much more uniform (IMO) and explicit.
 	//
-	//     obj.x = other.fn   (attr 'fn' of other is bound to other)
-	//     obj.x = other->fn  (attr 'fn' of other is _not_ bound to other)
+	//     obj.x = other.fn   (slot 'fn' of other is bound to other)
+	//     obj.x = other->fn  (slot 'fn' of other is _not_ bound to other)
 	//
 	// a weird side-effect is that now the semantics for assignment has
 	// to be changed as well. This should be fine, since most of the time
@@ -417,6 +420,19 @@ func (p *Parser) identifier() Expr {
 
 func (p *Parser) literal() Expr {
 	return newLiteral(p.consume())
+}
+
+func (p *Parser) array() Expr {
+	p.consume()
+	exprs := []Expr{}
+	for !p.isAtEnd() && !p.check(lexer.RIGHT_BRACKET) {
+		exprs = append(exprs, p.expression())
+		if !p.match(lexer.COMMA) {
+			break
+		}
+	}
+	p.expect(lexer.RIGHT_BRACKET, "unclosed '['")
+	return newArray(exprs)
 }
 
 func (p *Parser) function() Expr {

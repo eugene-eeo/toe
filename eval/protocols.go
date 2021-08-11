@@ -208,7 +208,7 @@ func (f *Function) Call(ctx *Context, args []Value) Value {
 // =========
 
 func (ctx *Context) binary(op lexer.TokenType, left, right Value) Value {
-	// Fast case: note that this also handles pairs of VT_{NUMBER,STRING}.
+	// Fast case: note that this also handles pairs of VT_{NIL,BOOLEAN,NUMBER,STRING}.
 	if op == lexer.EQUAL_EQUAL && left == right {
 		return TRUE
 	}
@@ -235,6 +235,14 @@ func (ctx *Context) binary(op lexer.TokenType, left, right Value) Value {
 			right.Type().String(),
 		)))
 	}
+}
+
+// areObjectsEqual returns TRUE if the two objects are equal, FALSE otherwise.
+func (ctx *Context) areObjectsEqual(left, right Value) Value {
+	if left == right {
+		return TRUE
+	}
+	return FALSE
 }
 
 func (ctx *Context) unary(op lexer.TokenType, right Value) Value {

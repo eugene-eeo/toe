@@ -288,11 +288,3 @@ func (ctx *Context) getObjectHash(v Value) (hash Value) {
 	}
 	return newError(String(fmt.Sprintf("object %s is not hashable", v.Type())))
 }
-
-// areObjectsEqual returns TRUE if the two objects are equal, FALSE otherwise.
-func (ctx *Context) areObjectsEqual(left, right Value) Value {
-	if left == right {
-		return TRUE
-	}
-	return FALSE
-}

@@ -16,7 +16,7 @@ type binOpInfo struct {
 	left, right ValueType
 }
 
-type binOpImpl func(left, right Value) Value
+type binOpImpl func(ctx *Context, left, right Value) Value
 
 var binOpTable = map[binOpInfo]binOpImpl{}
 
@@ -27,29 +27,83 @@ func initBinOpTable() {
 		impl        binOpImpl
 	}{
 		// Numbers
-		{lexer.EQUAL_EQUAL, VT_NUMBER, VT_NUMBER, func(a, b Value) Value { return Boolean(a.(Number) == b.(Number)) }},
-		{lexer.BANG_EQUAL, VT_NUMBER, VT_NUMBER, func(a, b Value) Value { return Boolean(a.(Number) != b.(Number)) }},
-		{lexer.LESS, VT_NUMBER, VT_NUMBER, func(a, b Value) Value { return Boolean(a.(Number) < b.(Number)) }},
-		{lexer.LESS_EQUAL, VT_NUMBER, VT_NUMBER, func(a, b Value) Value { return Boolean(a.(Number) <= b.(Number)) }},
-		{lexer.GREATER, VT_NUMBER, VT_NUMBER, func(a, b Value) Value { return Boolean(a.(Number) > b.(Number)) }},
-		{lexer.GREATER_EQUAL, VT_NUMBER, VT_NUMBER, func(a, b Value) Value { return Boolean(a.(Number) >= b.(Number)) }},
-		{lexer.PLUS, VT_NUMBER, VT_NUMBER, func(a, b Value) Value { return a.(Number) + b.(Number) }},
-		{lexer.MINUS, VT_NUMBER, VT_NUMBER, func(a, b Value) Value { return a.(Number) - b.(Number) }},
-		{lexer.SLASH, VT_NUMBER, VT_NUMBER, func(a, b Value) Value { return a.(Number) / b.(Number) }},
-		{lexer.STAR, VT_NUMBER, VT_NUMBER, func(a, b Value) Value { return a.(Number) * b.(Number) }},
+		{lexer.LESS,          VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return Boolean(a.(Number) < b.(Number)) }},
+		{lexer.LESS_EQUAL,    VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return Boolean(a.(Number) <= b.(Number)) }},
+		{lexer.GREATER,       VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return Boolean(a.(Number) > b.(Number)) }},
+		{lexer.GREATER_EQUAL, VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return Boolean(a.(Number) >= b.(Number)) }},
+		{lexer.PLUS,          VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return a.(Number) + b.(Number) }},
+		{lexer.MINUS,         VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return a.(Number) - b.(Number) }},
+		{lexer.SLASH,         VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return a.(Number) / b.(Number) }},
+		{lexer.STAR,          VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return a.(Number) * b.(Number) }},
 		// String Operations
-		{lexer.EQUAL_EQUAL, VT_STRING, VT_STRING, func(a, b Value) Value { return Boolean(a.(String) == b.(String)) }},
-		{lexer.BANG_EQUAL, VT_STRING, VT_STRING, func(a, b Value) Value { return Boolean(a.(String) != b.(String)) }},
-		{lexer.LESS, VT_STRING, VT_STRING, func(a, b Value) Value { return Boolean(a.(String) < b.(String)) }},
-		{lexer.LESS_EQUAL, VT_STRING, VT_STRING, func(a, b Value) Value { return Boolean(a.(String) <= b.(String)) }},
-		{lexer.GREATER, VT_STRING, VT_STRING, func(a, b Value) Value { return Boolean(a.(String) > b.(String)) }},
-		{lexer.GREATER_EQUAL, VT_STRING, VT_STRING, func(a, b Value) Value { return Boolean(a.(String) >= b.(String)) }},
-		{lexer.PLUS, VT_STRING, VT_STRING, func(a, b Value) Value { return a.(String) + b.(String) }},
-		{lexer.STAR, VT_STRING, VT_NUMBER, func(a, b Value) Value {
+		{lexer.LESS,          VT_STRING, VT_STRING, func(ctx *Context, a, b Value) Value { return Boolean(a.(String) < b.(String)) }},
+		{lexer.LESS_EQUAL,    VT_STRING, VT_STRING, func(ctx *Context, a, b Value) Value { return Boolean(a.(String) <= b.(String)) }},
+		{lexer.GREATER,       VT_STRING, VT_STRING, func(ctx *Context, a, b Value) Value { return Boolean(a.(String) > b.(String)) }},
+		{lexer.GREATER_EQUAL, VT_STRING, VT_STRING, func(ctx *Context, a, b Value) Value { return Boolean(a.(String) >= b.(String)) }},
+		{lexer.PLUS,          VT_STRING, VT_STRING, func(ctx *Context, a, b Value) Value { return a.(String) + b.(String) }},
+		{lexer.STAR,          VT_STRING, VT_NUMBER, func(ctx *Context, a, b Value) Value {
 			return String(strings.Repeat(string(a.(String)), int(b.(Number))))
 		}},
+		// Array Operations
+		{lexer.EQUAL_EQUAL, VT_ARRAY, VT_ARRAY, func(ctx *Context, a, b Value) Value { return bi_array_equal(ctx, a.(*Array), b.(*Array)) }},
+		{lexer.PLUS, VT_ARRAY, VT_ARRAY, func(ctx *Context, a, b Value) Value { return bi_array_concat_new(ctx, a.(*Array), b.(*Array)) }},
+		// Hash Operations
+		{lexer.EQUAL_EQUAL, VT_HASH, VT_HASH, func(ctx *Context, a, b Value) Value { return bi_hash_equal(ctx, a.(*Hash), b.(*Hash)) }},
 	}
 	for _, entry := range ops {
 		binOpTable[binOpInfo{entry.op, entry.left, entry.right}] = entry.impl
 	}
+}
+
+func bi_array_equal(ctx *Context, left, right *Array) Value {
+	if len(left.values) != len(right.values) {
+		return FALSE
+	}
+	for i, lhs := range left.values {
+		rhs := right.values[i]
+		rv := ctx.areObjectsEqual(lhs, rhs)
+		if isError(rv) {
+			return rv
+		}
+		if !isTruthy(rv) {
+			return FALSE
+		}
+	}
+	return TRUE
+}
+
+func bi_array_concat_new(ctx *Context, left, right *Array) Value {
+	l_sz := len(left.values)
+	r_sz := len(right.values)
+	values := make([]Value, l_sz + r_sz)
+	copy(values, left.values)
+	copy(values[l_sz:], right.values)
+	return newArray(values)
+}
+
+func bi_hash_equal(ctx *Context, left, right *Hash) Value {
+	if left.table.size() != right.table.size() {
+		return FALSE
+	}
+	for _, entry := range left.table.entries {
+		if entry.hasValue() {
+			key := *entry.key
+			lhs := *entry.value
+			rhs, found, err := right.table.get(key)
+			if err != nil {
+				return err
+			}
+			if !found {
+				return FALSE
+			}
+			rv := ctx.areObjectsEqual(lhs, rhs)
+			if isError(rv) {
+				return rv
+			}
+			if !isTruthy(rv) {
+				return FALSE
+			}
+		}
+	}
+	return TRUE
 }

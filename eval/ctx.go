@@ -11,13 +11,11 @@ func init() {
 }
 
 type Context struct {
-	// stack contains the current call stack. the idea is that we consult the
-	// call-stack to tell us which function we're in, and augment that using
-	// an expression's token.
-	stack []string
-	// the current environment and module we're executing.
-	env    *environment
-	module *parser.Module
+	// stack contains the current call stack. we consult the call-stack to tell
+	// us which function we're in, and augment that using an expression's token.
+	stack []callStackEntry
+	// the current environment we're executing.
+	env *environment
 	// if we're in a user-defined function, what is the current object we're
 	// bound to -- we need this to implement super.
 	this Value
@@ -26,14 +24,17 @@ type Context struct {
 }
 
 func NewContext() *Context {
-	return &Context{stack: make([]string, 0, 8), ht_seed: getNewHashTableSeed()}
+	return &Context{
+		stack:   make([]callStackEntry, 0, 8),
+		ht_seed: getNewHashTableSeed(),
+	}
 }
 
 func (ctx *Context) pushEnv() { ctx.env = newEnv(ctx.env) }
 func (ctx *Context) popEnv()  { ctx.env = ctx.env.outer }
 
-func (ctx *Context) pushFunc(fn string) { ctx.stack = append(ctx.stack, fn) }
-func (ctx *Context) popFunc()           { ctx.stack = ctx.stack[:len(ctx.stack)-1] }
+func (ctx *Context) pushFunc(e callStackEntry) { ctx.stack = append(ctx.stack, e) }
+func (ctx *Context) popFunc()                  { ctx.stack = ctx.stack[:len(ctx.stack)-1] }
 
 func (ctx *Context) EvalStmt(node parser.Stmt) Value {
 	switch node := node.(type) {
@@ -111,10 +112,8 @@ func (ctx *Context) EvalExpr(node parser.Expr) Value {
 // ==========
 
 func (ctx *Context) evalModule(module *parser.Module) Value {
-	old_module := ctx.module
-	ctx.module = module
 	ctx.pushEnv()
-	ctx.pushFunc("[Module]")
+	ctx.pushFunc(&moduleCse{module.Filename})
 	for _, stmt := range module.Stmts {
 		rv := ctx.EvalStmt(stmt)
 		if isError(rv) {
@@ -123,7 +122,6 @@ func (ctx *Context) evalModule(module *parser.Module) Value {
 	}
 	ctx.popFunc()
 	ctx.popEnv()
-	ctx.module = old_module
 	return NIL
 }
 
@@ -395,7 +393,8 @@ func (ctx *Context) evalHash(node *parser.Hash) Value {
 }
 
 func (ctx *Context) evalFunction(node *parser.Function) Value {
-	return newFunction(ctx.module, node, nil, ctx.env)
+	fn := ctx.stack[len(ctx.stack)-1].Filename()
+	return newFunction(fn, node, nil, ctx.env)
 }
 
 func (ctx *Context) evalSuper(node *parser.Super) Value {
@@ -416,11 +415,12 @@ func (ctx *Context) evalSuper(node *parser.Super) Value {
 // =========
 
 func (ctx *Context) addErrorStack(err *Error, token lexer.Token) *Error {
+	cse := ctx.stack[len(ctx.stack)-1]
 	err.stack = append(err.stack, context{
-		fn:  ctx.module.Filename,
+		fn:  cse.Filename(),
 		ln:  token.Line,
 		col: token.Column,
-		ctx: ctx.stack[len(ctx.stack)-1],
+		ctx: cse.Context(),
 	})
 	return err
 }

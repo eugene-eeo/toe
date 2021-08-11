@@ -186,7 +186,6 @@ func (l *Lexer) match(ch rune) bool {
 
 func (l *Lexer) ScanTokens() {
 	for !l.stop && !l.isAtEnd() && len(l.Errors) <= 10 {
-		l.start = l.current
 		l.scanToken()
 	}
 	l.Tokens = append(l.Tokens, Token{EOF, "", nil, l.line, l.column})

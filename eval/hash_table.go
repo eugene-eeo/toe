@@ -71,6 +71,12 @@ func (v Number) Hash() Value {
 	return Number(math.Float64frombits(h.Sum64()))
 }
 
+func (v *Function) Hash() Value {
+	h := fnv.New64a()
+	h.Write([]byte(fmt.Sprintf("F%p", v)))
+	return Number(math.Float64frombits(h.Sum64()))
+}
+
 // =================
 // Actual hash table
 // =================
@@ -157,11 +163,10 @@ func (ht *hashTable) resize(grow bool) {
 		for {
 			// Note: here we only have to care about whether a key
 			// was already set.
-			ref := &ht.entries[idx]
-			if ref.key == nil {
+			if ht.entries[idx].key == nil {
 				ht.sz++
 				ht.realSz++
-				*ref = he
+				ht.entries[idx] = he
 				break
 			}
 			idx = (idx + 1) & mask

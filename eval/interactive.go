@@ -17,9 +17,8 @@ func NewInteractiveContext() *InteractiveContext {
 	module := &parser.Module{Filename: fn}
 	res := resolver.New(module)
 	ctx := NewContext()
-	ctx.module = module
 	ctx.pushEnv()
-	ctx.pushFunc("[Module]")
+	ctx.pushFunc(&moduleCse{fn})
 	return &InteractiveContext{fn, ctx, res}
 }
 

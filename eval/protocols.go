@@ -115,7 +115,7 @@ func (f *Function) Bind(this Value) *Function {
 	}
 	// This means that we transfer the properties, but also give the new
 	// function it's own `namespace'.
-	bound := newFunction(f.module, f.node, this, f.closure)
+	bound := newFunction(f.filename, f.node, this, f.closure)
 	bound.Object.proto = f
 	return bound
 }
@@ -177,6 +177,8 @@ func (ctx *Context) call(callee Value, args []Value) Value {
 	switch callee := callee.(type) {
 	case *Function:
 		return callee.Call(ctx, args)
+	case *Builtin:
+		return callee.Call(ctx, args)
 	}
 	err := newError(String("not a function"))
 	return err
@@ -191,15 +193,13 @@ func (f *Function) getThis() Value {
 }
 
 func (f *Function) Call(ctx *Context, args []Value) Value {
-	old_mod := ctx.module
 	old_env := ctx.env
 	old_this := ctx.this
 
 	ctx.env = f.closure
-	ctx.module = f.module
 	ctx.this = f.getThis()
 	ctx.pushEnv()
-	ctx.pushFunc(f.ctx)
+	ctx.pushFunc(&functionCse{f})
 
 	ctx.env.set("this", ctx.this)
 	for i, id := range f.node.Params {
@@ -221,7 +221,17 @@ func (f *Function) Call(ctx *Context, args []Value) Value {
 	ctx.popEnv()
 	ctx.this = old_this
 	ctx.env = old_env
-	ctx.module = old_mod
+	return rv
+}
+
+func (b *Builtin) Call(ctx *Context, args []Value) Value {
+	this := b.this
+	if this == nil {
+		b.this = NIL
+	}
+	ctx.pushFunc(&builtinCse{b})
+	rv := b.call(ctx, this, args)
+	ctx.popFunc()
 	return rv
 }
 
@@ -230,26 +240,40 @@ func (f *Function) Call(ctx *Context, args []Value) Value {
 // =========
 
 func (ctx *Context) binary(op lexer.TokenType, left, right Value) Value {
-	// Fast case: note that this also handles pairs of VT_{NIL,BOOLEAN,NUMBER,STRING}.
+	// Fast case for ==, != cannot be fast-cased...
 	if op == lexer.EQUAL_EQUAL && left == right {
 		return TRUE
 	}
-	if op == lexer.BANG_EQUAL && left != right {
-		return TRUE
-	}
 	// Search the operator table.
-	info := binOpInfo{op, left.Type(), right.Type()}
-	if impl, ok := binOpTable[info]; ok {
-		rv := impl(left, right)
-		if rv != nil {
-			return rv
+	rv, ok := ctx.binaryDispatch(op, left, right)
+	if !ok {
+		// Try to see if we can find a logical alternative.
+		// For example, a != b === !(a == b). Note that here we _cannot_
+		// use binary(...) again.
+		switch op {
+		// == and != falls back to pointer equality
+		case lexer.EQUAL_EQUAL:
+			altRv, altOk := ctx.binaryDispatch(lexer.BANG_EQUAL, left, right)
+			if altOk {
+				if isError(altRv) {
+					return altRv
+				} else {
+					return Boolean(!isTruthy(altRv))
+				}
+			}
+			return Boolean(left == right)
+		case lexer.BANG_EQUAL:
+			altRv, altOk := ctx.binaryDispatch(lexer.EQUAL_EQUAL, left, right)
+			if altOk {
+				if isError(altRv) {
+					return altRv
+				} else {
+					return Boolean(!isTruthy(altRv))
+				}
+			}
+			return Boolean(left != right)
 		}
-	}
-	// Fallback for == and !=: if they were truly equal (or not equal), we would
-	// have caught those earlier; thus we return false here.
-	if op == lexer.EQUAL_EQUAL || op == lexer.BANG_EQUAL {
-		return FALSE
-	} else {
+		// There really is no implementation.
 		return newError(String(fmt.Sprintf(
 			"unsupported operands for %q: %s and %s",
 			op.String(),
@@ -257,14 +281,23 @@ func (ctx *Context) binary(op lexer.TokenType, left, right Value) Value {
 			right.Type().String(),
 		)))
 	}
+	return rv
+}
+
+// binaryDispatch searches the binary operations table for a corresponding
+// handler for the given values.
+func (ctx *Context) binaryDispatch(op lexer.TokenType, left, right Value) (Value, bool) {
+	info := binOpInfo{op, left.Type(), right.Type()}
+	if impl, ok := binOpTable[info]; ok {
+		rv := impl(ctx, left, right)
+		return rv, true
+	}
+	return nil, false
 }
 
 // areObjectsEqual returns TRUE if the two objects are equal, FALSE otherwise.
 func (ctx *Context) areObjectsEqual(left, right Value) Value {
-	if left == right {
-		return TRUE
-	}
-	return FALSE
+	return ctx.binary(lexer.EQUAL_EQUAL, left, right)
 }
 
 func (ctx *Context) unary(op lexer.TokenType, right Value) Value {

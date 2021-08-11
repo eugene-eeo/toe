@@ -22,6 +22,7 @@ const (
 	VT_OBJECT
 	VT_ARRAY
 	VT_HASH
+	VT_BUILTIN
 	// Runtime Control
 	VT_BREAK
 	VT_CONTINUE
@@ -38,6 +39,10 @@ type Value interface {
 // =======
 // Objects
 // =======
+//
+// When we speak of objects, they refer to the `real' values in the runtime,
+// not control values or tombstones. All `real' values need to additionally
+// implement the Stringer protocol.
 
 type Nil struct{}
 type Boolean bool
@@ -58,23 +63,20 @@ func newObject(proto Value) *Object {
 
 type Function struct {
 	*Object
-	node    *parser.Function
-	this    Value
-	closure *environment
-	module  *parser.Module
-	ctx     string // precomputed context
+	node     *parser.Function
+	this     Value
+	closure  *environment
+	filename string
 }
 
-func newFunction(module *parser.Module, node *parser.Function, this Value, env *environment) *Function {
-	f := &Function{
-		Object:  newObject(nil),
-		module:  module,
-		node:    node,
-		this:    this,
-		closure: env,
+func newFunction(filename string, node *parser.Function, this Value, env *environment) *Function {
+	return &Function{
+		Object:   newObject(nil),
+		filename: filename,
+		node:     node,
+		this:     this,
+		closure:  env,
 	}
-	f.ctx = f.String()
-	return f
 }
 
 type Array struct {
@@ -101,6 +103,14 @@ func newHash(ctx *Context) *Hash {
 	}
 }
 
+// Builtin represents a built-in function
+type Builtin struct {
+	*Object
+	name string
+	this Value
+	call func(ctx *Context, this Value, args []Value) Value
+}
+
 func (v Nil) Type() ValueType       { return VT_NIL }
 func (v Boolean) Type() ValueType   { return VT_BOOLEAN }
 func (v Number) Type() ValueType    { return VT_NUMBER }
@@ -109,6 +119,7 @@ func (v *Object) Type() ValueType   { return VT_OBJECT }
 func (v *Function) Type() ValueType { return VT_FUNCTION }
 func (v *Array) Type() ValueType    { return VT_ARRAY }
 func (v *Hash) Type() ValueType     { return VT_HASH }
+func (v *Builtin) Type() ValueType  { return VT_BUILTIN }
 
 func (v Nil) String() string { return "nil" }
 func (v Boolean) String() string {
@@ -171,6 +182,14 @@ func (v *Hash) String() string {
 	return buf.String()
 }
 
+func (v *Builtin) String() string {
+	isBound := ""
+	if v.this != nil {
+		isBound = " bound"
+	}
+	return fmt.Sprintf("[Function%s %s]", isBound, v.name)
+}
+
 func (v String) Inspect() string { return fmt.Sprintf("%q", string(v)) }
 
 type Inspect interface{ Inspect() string }
@@ -231,10 +250,9 @@ func (e *Error) String() string {
 	buf.WriteString("Error: ")
 	buf.WriteString(e.reason.(Stringer).String())
 	buf.WriteString("\n")
-	for i := len(e.stack) - 1; i >= 0; i-- {
-		ctx := e.stack[i]
+	for i, ctx := range e.stack {
 		buf.WriteString(fmt.Sprintf("  at %s:%d:%d: %s", ctx.fn, ctx.ln, ctx.col, ctx.ctx))
-		if i != 0 {
+		if i != len(e.stack)-1 {
 			buf.WriteString("\n")
 		}
 	}

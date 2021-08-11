@@ -78,6 +78,8 @@ func (ctx *Context) EvalExpr(node parser.Expr) Value {
 		return ctx.evalGet(node)
 	case *parser.Set:
 		return ctx.evalSet(node)
+	case *parser.Method:
+		return ctx.evalMethod(node)
 	case *parser.Call:
 		return ctx.evalCall(node)
 	case *parser.Identifier:
@@ -305,9 +307,6 @@ func (ctx *Context) evalGet(node *parser.Get) Value {
 	if isError(rv) {
 		return ctx.addErrorStack(rv.(*Error), node.Name)
 	}
-	if node.Bound {
-		rv = ctx.bind(rv, object)
-	}
 	return rv
 }
 
@@ -324,8 +323,30 @@ func (ctx *Context) evalSet(node *parser.Set) Value {
 	if isError(rv) {
 		return ctx.addErrorStack(rv.(*Error), node.Name)
 	}
-	if node.Bound {
-		rv = ctx.bind(rv, object)
+	return rv
+}
+
+func (ctx *Context) evalMethod(node *parser.Method) Value {
+	object := ctx.EvalExpr(node.Object)
+	if isError(object) {
+		return object
+	}
+	meth := ctx.getSlot(object, node.Name.Lexeme)
+	if isError(meth) {
+		return ctx.addErrorStack(meth.(*Error), node.Name)
+	}
+	meth = ctx.bind(meth, object)
+	args := make([]Value, len(node.Args))
+	for i, expr_node := range node.Args {
+		expr := ctx.EvalExpr(expr_node)
+		if isError(expr) {
+			return expr
+		}
+		args[i] = expr
+	}
+	rv := ctx.call(meth, args)
+	if isError(rv) {
+		return ctx.addErrorStack(rv.(*Error), node.LParen)
 	}
 	return rv
 }

@@ -26,7 +26,7 @@ const (
 	PREC_SUM     // +, -
 	PREC_PRODUCT // *, /
 	PREC_UNARY   // !, -
-	PREC_CALL    // (), ., ->
+	PREC_CALL    // (), .
 )
 
 // ====
@@ -72,7 +72,6 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.STAR:          p.binary,
 		lexer.SLASH:         p.binary,
 		lexer.DOT:           p.get,
-		lexer.MINUS_GREATER: p.get,
 		lexer.LEFT_PAREN:    p.call,
 	}
 	p.precedences = map[lexer.TokenType]int{
@@ -90,7 +89,6 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.STAR:          PREC_PRODUCT,
 		lexer.SLASH:         PREC_PRODUCT,
 		lexer.DOT:           PREC_CALL,
-		lexer.MINUS_GREATER: PREC_CALL,
 		lexer.LEFT_PAREN:    PREC_CALL,
 		lexer.LEFT_BRACKET:  PREC_CALL,
 	}
@@ -318,7 +316,7 @@ func (p *Parser) exprStmt() Stmt {
 // or       → expression "or" expression
 // binary   → expression ( "==" | "!=" | "<=" | ">=" | "<" | ">" | "+" | "-" | "*" | "/" ) expression
 // unary    → ( "!" | "-" ) expression
-// get      → expression ( "." | "->" ) ( IDENTIFIER | "nil" | "true" | "false" )
+// get      → expression "." ( IDENTIFIER | "nil" | "true" | "false" )
 // call     → expression "(" args ")"
 // args     → expression ( "," args )? | ε
 // literal  → STRING | IDENTIFIER | NUMBER | TRUE | FALSE | NIL | function | array | hash
@@ -367,7 +365,7 @@ func (p *Parser) assign(left Expr) Expr {
 	right := p.precedence(PREC_ASSIGN - 1)
 	switch left := left.(type) {
 	case *Get:
-		return newSet(left.Object, left.Name, left.Bound, right)
+		return newSet(left.Object, left.Name, right)
 	case *Identifier:
 		return newAssign(left.Id, right)
 	default:
@@ -377,27 +375,11 @@ func (p *Parser) assign(left Expr) Expr {
 }
 
 func (p *Parser) get(left Expr) Expr {
-	// Be careful that are two kinds of slot accesses.
-	// The typical syntax defaults to `binding' mode, since most of the
-	// time I expect that users would want to set callbacks; moreover
-	// this makes the syntax much more uniform (IMO) and explicit.
-	//
-	//     obj.x = other.fn   (slot 'fn' of other is bound to other)
-	//     obj.x = other->fn  (slot 'fn' of other is _not_ bound to other)
-	//
-	// a weird side-effect is that now the semantics for assignment has
-	// to be changed as well. This should be fine, since most of the time
-	// we don't use assignment results as an expression:
-	//
-	//     obj.a  = x  returns x bound to obj
-	//     obj->a = x  returns x
-	//
 	tok := p.consume()
-	bound := tok.Type == lexer.DOT // is this a binding access or not?
 	name := p.consume()
 	switch name.Type {
 	case lexer.IDENTIFIER, lexer.NIL, lexer.TRUE, lexer.FALSE:
-		return newGet(left, name, bound)
+		return newGet(left, name)
 	}
 	panic(p.error(name, "expected a name after %q", tok.Lexeme))
 }
@@ -484,19 +466,22 @@ func (p *Parser) call(left Expr) Expr {
 		}
 	}
 	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
-	return newCall(left, lParenTok, args)
+	switch left := left.(type) {
+	case *Get:
+		return newMethod(left.Object, left.Name, lParenTok, args)
+	default:
+		return newCall(left, lParenTok, args)
+	}
 }
 
 func (p *Parser) super() Expr {
 	superToken := p.consume()
-	if !p.match(lexer.DOT, lexer.MINUS_GREATER) {
-		panic(p.error(p.peek(), "expect '.' or '->' after 'super'"))
-	}
+	p.expect(lexer.DOT, "expect '.' after 'super'")
 	dot := p.previous()
 	name := p.consume()
 	switch name.Type {
 	case lexer.IDENTIFIER, lexer.NIL, lexer.TRUE, lexer.FALSE:
-		return newSuper(superToken, name, dot.Type == lexer.DOT)
+		return newSuper(superToken, name)
 	}
 	panic(p.error(name, "expected a name after %q", dot.Lexeme))
 }

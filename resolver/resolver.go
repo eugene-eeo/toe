@@ -135,6 +135,8 @@ func (r *Resolver) resolve(node parser.Node) {
 		r.resolveGet(node)
 	case *parser.Set:
 		r.resolveSet(node)
+	case *parser.Method:
+		r.resolveMethod(node)
 	case *parser.Call:
 		r.resolveCall(node)
 	case *parser.Identifier:
@@ -269,6 +271,13 @@ func (r *Resolver) resolveSet(node *parser.Set) {
 	r.resolve(node.Right)
 	addFunctionName(node.Right, node.Name.Lexeme)
 	r.resolve(node.Object)
+}
+
+func (r *Resolver) resolveMethod(node *parser.Method) {
+	r.resolve(node.Object)
+	for _, arg := range node.Args {
+		r.resolve(arg)
+	}
 }
 
 func (r *Resolver) resolveCall(node *parser.Call) {

@@ -142,11 +142,7 @@ func (node *Get) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("(")
 	buf.WriteString(node.Object.String())
-	if node.Bound {
-		buf.WriteString(".")
-	} else {
-		buf.WriteString("->")
-	}
+	buf.WriteString(".")
 	buf.WriteString(node.Name.Lexeme)
 	buf.WriteString(")")
 	return buf.String()
@@ -156,11 +152,7 @@ func (node *Set) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("(")
 	buf.WriteString(node.Object.String())
-	if node.Bound {
-		buf.WriteString(".")
-	} else {
-		buf.WriteString("->")
-	}
+	buf.WriteString(".")
 	buf.WriteString(node.Name.Lexeme)
 	buf.WriteString(" = ")
 	buf.WriteString(node.Right.String())
@@ -173,6 +165,23 @@ func (node *Unary) String() string {
 	buf.WriteString("(")
 	buf.WriteString(node.Op.Lexeme)
 	buf.WriteString(node.Right.String())
+	buf.WriteString(")")
+	return buf.String()
+}
+
+func (node *Method) String() string {
+	var buf bytes.Buffer
+	args := make([]string, len(node.Args))
+	for i, arg := range node.Args {
+		args[i] = arg.String()
+	}
+	buf.WriteString("(")
+	buf.WriteString(node.Object.String())
+	buf.WriteString(".")
+	buf.WriteString(node.Name.Lexeme)
+	buf.WriteString(node.LParen.Lexeme)
+	buf.WriteString(strings.Join(args, ", "))
+	buf.WriteString(")")
 	buf.WriteString(")")
 	return buf.String()
 }
@@ -237,11 +246,7 @@ func (node *Super) String() string {
 	var buf bytes.Buffer
 	buf.WriteString("(")
 	buf.WriteString(node.Tok.Lexeme)
-	if node.Bound {
-		buf.WriteString(".")
-	} else {
-		buf.WriteString("->")
-	}
+	buf.WriteString(".")
 	buf.WriteString(node.Name.Lexeme)
 	buf.WriteString(")")
 	return buf.String()

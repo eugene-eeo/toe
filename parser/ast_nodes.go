@@ -221,14 +221,12 @@ func (node *Unary) expr() {}
 type Get struct {
 	Object Expr
 	Name   lexer.Token
-	Bound  bool
 }
 
-func newGet(Object Expr, Name lexer.Token, Bound bool) *Get {
+func newGet(Object Expr, Name lexer.Token) *Get {
 	return &Get{
 		Object: Object,
 		Name:   Name,
-		Bound:  Bound,
 	}
 }
 func (node *Get) node() {}
@@ -237,20 +235,36 @@ func (node *Get) expr() {}
 type Set struct {
 	Object Expr
 	Name   lexer.Token
-	Bound  bool
 	Right  Expr
 }
 
-func newSet(Object Expr, Name lexer.Token, Bound bool, Right Expr) *Set {
+func newSet(Object Expr, Name lexer.Token, Right Expr) *Set {
 	return &Set{
 		Object: Object,
 		Name:   Name,
-		Bound:  Bound,
 		Right:  Right,
 	}
 }
 func (node *Set) node() {}
 func (node *Set) expr() {}
+
+type Method struct {
+	Object Expr
+	Name   lexer.Token
+	LParen lexer.Token
+	Args   []Expr
+}
+
+func newMethod(Object Expr, Name lexer.Token, LParen lexer.Token, Args []Expr) *Method {
+	return &Method{
+		Object: Object,
+		Name:   Name,
+		LParen: LParen,
+		Args:   Args,
+	}
+}
+func (node *Method) node() {}
+func (node *Method) expr() {}
 
 type Call struct {
 	Callee Expr
@@ -337,16 +351,14 @@ func (node *Function) node() {}
 func (node *Function) expr() {}
 
 type Super struct {
-	Tok   lexer.Token
-	Name  lexer.Token
-	Bound bool
+	Tok  lexer.Token
+	Name lexer.Token
 }
 
-func newSuper(Tok lexer.Token, Name lexer.Token, Bound bool) *Super {
+func newSuper(Tok lexer.Token, Name lexer.Token) *Super {
 	return &Super{
-		Tok:   Tok,
-		Name:  Name,
-		Bound: Bound,
+		Tok:  Tok,
+		Name: Name,
 	}
 }
 func (node *Super) node() {}

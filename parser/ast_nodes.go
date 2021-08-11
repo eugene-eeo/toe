@@ -305,6 +305,20 @@ func newArray(Exprs []Expr) *Array {
 func (node *Array) node() {}
 func (node *Array) expr() {}
 
+type Hash struct {
+	LBrace lexer.Token
+	Pairs  []Pair
+}
+
+func newHash(LBrace lexer.Token, Pairs []Pair) *Hash {
+	return &Hash{
+		LBrace: LBrace,
+		Pairs:  Pairs,
+	}
+}
+func (node *Hash) node() {}
+func (node *Hash) expr() {}
+
 type Function struct {
 	Fn     lexer.Token
 	Params []lexer.Token

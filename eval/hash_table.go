@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"math"
-	"toe/lexer"
 )
 
 // This file implements a hash table for values.
@@ -13,14 +12,18 @@ import (
 // hashable objects are either one of the hashable builtins,
 // or an object that implements the hash protocol.
 
-// =================
-// Hashable Protocol
-// =================
-
-type Hashable interface {
-	// We actually need equals() here, but we use binary()
-	// for now.
-	Hash() Value // this should return Number
+func getNewHashTableSeed() uint64 {
+	var b [8]byte
+	rand.Read(b[:])
+	rv := uint64(b[0])
+	rv = (rv << 8) + uint64(b[1])
+	rv = (rv << 8) + uint64(b[2])
+	rv = (rv << 8) + uint64(b[3])
+	rv = (rv << 8) + uint64(b[4])
+	rv = (rv << 8) + uint64(b[5])
+	rv = (rv << 8) + uint64(b[6])
+	rv = (rv << 8) + uint64(b[7])
+	return rv
 }
 
 var (
@@ -83,17 +86,17 @@ const (
 
 type htEntry struct {
 	hash  uint64
-	key   *Hashable
+	key   *Value
 	value *Value
 }
 
+func (he htEntry) hasValue() bool    { return he.key != nil }
 func (he htEntry) isTombstone() bool { return he.key == nil && he.value == &TOMBSTONE }
 func (he htEntry) isEmpty() bool     { return he.key == nil && he.value == nil }
 
 type hashTable struct {
 	ctx     *Context
 	entries []htEntry
-	seed    uint64 // seed
 	sz      uint64 // number of non-free entries in the hash table
 	realSz  uint64 // number of non-tombstone, and non-empty entries in the hash table
 }
@@ -102,15 +105,14 @@ func newHashTable(ctx *Context) *hashTable {
 	return &hashTable{
 		ctx:     ctx,
 		entries: make([]htEntry, ht_MIN_SIZE),
-		seed:    getNewHashTableSeed(),
 		sz:      0,
 	}
 }
 
 // hash tries to hash the given object -- if its hash method
 // returned an error, then err will be an error object.
-func (ht *hashTable) hash(k Hashable) (h uint64, err Value) {
-	rv := k.Hash()
+func (ht *hashTable) hash(k Value) (h uint64, err Value) {
+	rv := ht.ctx.getObjectHash(k)
 	if isError(rv) {
 		return 0, rv
 	}
@@ -121,20 +123,6 @@ func (ht *hashTable) hash(k Hashable) (h uint64, err Value) {
 	}
 	h = math.Float64bits(float64(rv.(Number)))
 	return h, nil
-}
-
-func getNewHashTableSeed() uint64 {
-	var b [8]byte
-	rand.Read(b[:])
-	rv := uint64(b[0])
-	rv = (rv << 8) + uint64(b[1])
-	rv = (rv << 8) + uint64(b[2])
-	rv = (rv << 8) + uint64(b[3])
-	rv = (rv << 8) + uint64(b[4])
-	rv = (rv << 8) + uint64(b[5])
-	rv = (rv << 8) + uint64(b[6])
-	rv = (rv << 8) + uint64(b[7])
-	return rv
 }
 
 func (ht *hashTable) maybeResize() {
@@ -157,14 +145,14 @@ func (ht *hashTable) resize(grow bool) {
 	ht.sz = 0
 	ht.realSz = 0
 	ht.entries = make([]htEntry, newSize)
-	ht.seed = getNewHashTableSeed()
 	mask := uint64(len(ht.entries) - 1)
+	seed := ht.ctx.ht_seed
 	for _, he := range oldEntries {
-		if he.key == nil {
+		if !he.hasValue() {
 			continue
 		}
 		// fast reinsert using .hash
-		idx := (he.hash ^ ht.seed) & mask
+		idx := (he.hash ^ seed) & mask
 		start := idx
 		for {
 			// Note: here we only have to care about whether a key
@@ -191,14 +179,14 @@ func (ht *hashTable) resize(grow bool) {
 //
 //   - entry != nil && err == nil   (empty entry / a matching entry)
 //   - entry == nil && err != nil   (error)
-func (ht *hashTable) getEntry(k Hashable, forInsert bool) (entry *htEntry, hash uint64, err Value) {
+func (ht *hashTable) getEntry(k Value, forInsert bool) (entry *htEntry, hash uint64, err Value) {
 	hash, err = ht.hash(k)
 	if err != nil {
 		return nil, hash, err
 	}
 	size := uint64(len(ht.entries))
 	mask := size - 1
-	idx := (hash ^ ht.seed) & mask
+	idx := (hash ^ ht.ctx.ht_seed) & mask
 	start := idx
 	for {
 		ref := &ht.entries[idx]
@@ -216,7 +204,7 @@ func (ht *hashTable) getEntry(k Hashable, forInsert bool) (entry *htEntry, hash 
 			if key == k {
 				return ref, hash, nil
 			}
-			cmp_res := ht.ctx.binary(lexer.EQUAL_EQUAL, key.(Value), k.(Value))
+			cmp_res := ht.ctx.areObjectsEqual(key, k)
 			if isError(cmp_res) {
 				return nil, hash, cmp_res
 			}
@@ -233,7 +221,7 @@ func (ht *hashTable) getEntry(k Hashable, forInsert bool) (entry *htEntry, hash 
 }
 
 // get finds the value associated with the given key in the hash table, if any.
-func (ht *hashTable) get(k Hashable) (v Value, found bool, err Value) {
+func (ht *hashTable) get(k Value) (v Value, found bool, err Value) {
 	entry, _, err := ht.getEntry(k, false)
 	if err != nil {
 		return nil, false, err
@@ -245,7 +233,7 @@ func (ht *hashTable) get(k Hashable) (v Value, found bool, err Value) {
 }
 
 // delete deletes the given key from the table, if it exists.
-func (ht *hashTable) delete(k Hashable) (found bool, err Value) {
+func (ht *hashTable) delete(k Value) (found bool, err Value) {
 	entry, _, err := ht.getEntry(k, false)
 	if err != nil {
 		return false, err
@@ -262,7 +250,7 @@ func (ht *hashTable) delete(k Hashable) (found bool, err Value) {
 
 // insert inserts the given pair into the hash table.
 // on a successful insert, err == nil.
-func (ht *hashTable) insert(k Hashable, v Value) (err Value) {
+func (ht *hashTable) insert(k Value, v Value) (err Value) {
 	entry, hash, err := ht.getEntry(k, true)
 	if err != nil {
 		return err
@@ -286,4 +274,25 @@ func (ht *hashTable) insert(k Hashable, v Value) (err Value) {
 
 func (ht *hashTable) size() uint64 {
 	return ht.realSz
+}
+
+// ===============
+// Utility Methods
+// ===============
+
+// getObjectHash calls the object's hash function on v and returns the result.
+// if the result is an error, this needs to be handled.
+func (ctx *Context) getObjectHash(v Value) (hash Value) {
+	if hashable, ok := v.(interface{ Hash() Value }); ok {
+		return hashable.Hash()
+	}
+	return newError(String(fmt.Sprintf("object %s is not hashable", v.Type())))
+}
+
+// areObjectsEqual returns TRUE if the two objects are equal, FALSE otherwise.
+func (ctx *Context) areObjectsEqual(left, right Value) Value {
+	if left == right {
+		return TRUE
+	}
+	return FALSE
 }

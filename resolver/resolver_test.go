@@ -12,7 +12,7 @@ func TestResolver(t *testing.T) {
 let f = fn(x) { f(x + 1); return this.x; };
 f(1);
 let a = 1;
-{
+if (1) {
 	let g = nil;
 	g.func_name = fn() {
 		return a;
@@ -30,7 +30,7 @@ let a = 1;
 		return
 	}
 	f_func := module.Stmts[0].(*parser.Let).Value.(*parser.Function)
-	g_set := module.Stmts[3].(*parser.Block).Stmts[1].(*parser.ExprStmt).Expr.(*parser.Set)
+	g_set := module.Stmts[3].(*parser.If).Then.(*parser.Block).Stmts[1].(*parser.ExprStmt).Expr.(*parser.Set)
 	g_ident := g_set.Object.(*parser.Identifier)
 	g_func := g_set.Right.(*parser.Function)
 	f_inside_f := f_func.Body.Stmts[0].(*parser.ExprStmt).Expr.(*parser.Call).Callee.(*parser.Identifier)

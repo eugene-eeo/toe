@@ -24,3 +24,8 @@ type Resolvable interface {
 
 func (node *Identifier) AddLocation(loc int) { node.Loc = loc }
 func (node *Assign) AddLocation(loc int)     { node.Loc = loc }
+
+type Pair struct {
+	Key   Expr
+	Value Expr
+}

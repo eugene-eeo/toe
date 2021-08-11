@@ -2,6 +2,7 @@ package parser
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 )
 
@@ -203,6 +204,18 @@ func (node *Array) String() string {
 	buf.WriteString("[")
 	buf.WriteString(strings.Join(exprs, ", "))
 	buf.WriteString("]")
+	return buf.String()
+}
+
+func (node *Hash) String() string {
+	var buf bytes.Buffer
+	pairs := make([]string, len(node.Pairs))
+	for i, pair := range node.Pairs {
+		pairs[i] = fmt.Sprintf("%s: %s", pair.Key.String(), pair.Value.String())
+	}
+	buf.WriteString(node.LBrace.Lexeme)
+	buf.WriteString(strings.Join(pairs, ", "))
+	buf.WriteString("}")
 	return buf.String()
 }
 

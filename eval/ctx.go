@@ -21,10 +21,12 @@ type Context struct {
 	// if we're in a user-defined function, what is the current object we're
 	// bound to -- we need this to implement super.
 	this Value
+	// for hash tables
+	ht_seed uint64
 }
 
 func NewContext() *Context {
-	return &Context{stack: make([]string, 0, 8)}
+	return &Context{stack: make([]string, 0, 8), ht_seed: getNewHashTableSeed()}
 }
 
 func (ctx *Context) pushEnv() { ctx.env = newEnv(ctx.env) }
@@ -94,6 +96,8 @@ func (ctx *Context) EvalExpr(node parser.Expr) Value {
 		}
 	case *parser.Array:
 		return ctx.evalArray(node)
+	case *parser.Hash:
+		return ctx.evalHash(node)
 	case *parser.Function:
 		return ctx.evalFunction(node)
 	case *parser.Super:
@@ -368,6 +372,26 @@ func (ctx *Context) evalArray(node *parser.Array) Value {
 		values[i] = val
 	}
 	return newArray(values)
+}
+
+func (ctx *Context) evalHash(node *parser.Hash) Value {
+	hash := newHash(ctx)
+	for _, pair := range node.Pairs {
+		k := ctx.EvalExpr(pair.Key)
+		if isError(k) {
+			return k
+		}
+		v := ctx.EvalExpr(pair.Value)
+		if isError(v) {
+			return v
+		}
+		err := hash.table.insert(k, v)
+		if err != nil {
+			ctx.addErrorStack(err.(*Error), node.LBrace)
+			return err
+		}
+	}
+	return hash
 }
 
 func (ctx *Context) evalFunction(node *parser.Function) Value {

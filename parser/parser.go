@@ -51,6 +51,7 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.BANG:         p.unary,
 		lexer.MINUS:        p.unary,
 		lexer.LEFT_BRACKET: p.array,
+		lexer.LEFT_BRACE:   p.hash,
 		lexer.FN:           p.function,
 		lexer.SUPER:        p.super,
 	}
@@ -158,12 +159,12 @@ func (p *Parser) Parse() *Module {
 // the main entry point is the declaration rule:
 //
 //   declaration → let | statement
-//   statement   → for | while | if | block | break | continue | return | exprStmt
+//   statement   → for | while | if | break | continue | return | exprStmt
 //   let      → "let" IDENT "=" expression ";"
-//   for      → "for" "(" IDENT ":" expr ")" statement
-//   while    → "while" "(" expr ")" statement
-//   if       → "if" "(" expr ")" statement ( "else" statement )?
-//   block    → "{" declaration* "}"
+//   for      → "for" "(" IDENT ":" expr ")" block
+//   while    → "while" "(" expr ")" block
+//   if       → "if" "(" expr ")" block ( "else" statement )?
+//   block    → "{" declaration* "}" | statement
 //   break    → "break" ";"
 //   continue → "continue" ";"
 //   return   → "return" ( expr )? ";"
@@ -195,6 +196,19 @@ func (p *Parser) declaration() (stmt Stmt) {
 	return
 }
 
+func (p *Parser) blockStmt() Stmt {
+	if p.match(lexer.LEFT_BRACE) {
+		stmts := []Stmt{}
+		for !p.isAtEnd() && !p.check(lexer.RIGHT_BRACE) {
+			stmts = append(stmts, p.declaration())
+		}
+		p.expect(lexer.RIGHT_BRACE, "unclosed '{'")
+		return newBlock(stmts)
+	} else {
+		return p.statement()
+	}
+}
+
 func (p *Parser) statement() Stmt {
 	switch {
 	case p.check(lexer.FOR):
@@ -203,8 +217,6 @@ func (p *Parser) statement() Stmt {
 		return p.whileStmt()
 	case p.check(lexer.IF):
 		return p.ifStmt()
-	case p.check(lexer.LEFT_BRACE):
-		return p.blockStmt()
 	case p.check(lexer.CONTINUE):
 		return p.continueStmt()
 	case p.check(lexer.BREAK):
@@ -231,7 +243,7 @@ func (p *Parser) forStmt() Stmt {
 	p.expect(lexer.COLON, "expect ':' after identifier")
 	iter := p.expression()
 	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
-	stmt := p.statement()
+	stmt := p.blockStmt()
 	return newFor(forToken, ident, iter, stmt)
 }
 
@@ -240,7 +252,7 @@ func (p *Parser) whileStmt() Stmt {
 	p.expect(lexer.LEFT_PAREN, "expect '(' after 'while'")
 	cond := p.expression()
 	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
-	stmt := p.statement()
+	stmt := p.blockStmt()
 	return newWhile(cond, stmt)
 }
 
@@ -249,22 +261,12 @@ func (p *Parser) ifStmt() Stmt {
 	p.expect(lexer.LEFT_PAREN, "expect '(' after 'if'")
 	cond := p.expression()
 	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
-	then := p.statement()
+	then := p.blockStmt()
 	var elseStmt Stmt = nil
 	if p.match(lexer.ELSE) {
-		elseStmt = p.statement()
+		elseStmt = p.blockStmt()
 	}
 	return newIf(cond, then, elseStmt)
-}
-
-func (p *Parser) blockStmt() Stmt {
-	p.consume()
-	stmts := []Stmt{}
-	for !p.isAtEnd() && !p.check(lexer.RIGHT_BRACE) {
-		stmts = append(stmts, p.declaration())
-	}
-	p.expect(lexer.RIGHT_BRACE, "unclosed '{'")
-	return newBlock(stmts)
 }
 
 func (p *Parser) continueStmt() Stmt {
@@ -310,8 +312,7 @@ func (p *Parser) exprStmt() Stmt {
 //            | binary
 //            | unary
 //            | call | get
-//            | literal
-//            | super
+//            | literal | super
 // assign   → ( get | IDENTIFIER ) "=" expression
 // and      → expression "and" expression
 // or       → expression "or" expression
@@ -320,11 +321,13 @@ func (p *Parser) exprStmt() Stmt {
 // get      → expression ( "." | "->" ) ( IDENTIFIER | "nil" | "true" | "false" )
 // call     → expression "(" args ")"
 // args     → expression ( "," args )? | ε
-// literal  → STRING | IDENTIFIER | NUMBER | TRUE | FALSE | NIL | function | array
+// literal  → STRING | IDENTIFIER | NUMBER | TRUE | FALSE | NIL | function | array | hash
 // function → "fn" "(" params ")" block
 // params   → IDENTIFIER ( "," params )? | ε
 // array    → "[" args "]"
 // super    → "super" "." IDENTIFIER
+// hash     → "{" pairs "}"
+// pairs    → expr ":" expr ("," pairs)? | ε
 
 // expression matches a single expression.
 func (p *Parser) expression() Expr { return p.precedence(PREC_LOWEST) }
@@ -435,6 +438,22 @@ func (p *Parser) array() Expr {
 	return newArray(exprs)
 }
 
+func (p *Parser) hash() Expr {
+	lbrace := p.consume()
+	pairs := []Pair{}
+	for !p.isAtEnd() && !p.check(lexer.RIGHT_BRACE) {
+		key := p.expression()
+		p.expect(lexer.COLON, "expected ':' after key")
+		val := p.expression()
+		pairs = append(pairs, Pair{key, val})
+		if !p.match(lexer.COMMA) {
+			break
+		}
+	}
+	p.expect(lexer.RIGHT_BRACE, "unclosed '{'")
+	return newHash(lbrace, pairs)
+}
+
 func (p *Parser) function() Expr {
 	fnTok := p.consume()
 	p.expect(lexer.LEFT_PAREN, "expected a '(' after 'fn'")
@@ -448,6 +467,9 @@ func (p *Parser) function() Expr {
 		}
 	}
 	p.expect(lexer.RIGHT_PAREN, "unclosed '('")
+	if !p.check(lexer.LEFT_BRACE) {
+		panic(p.error(p.peek(), "expected '{' after function params"))
+	}
 	block := p.blockStmt().(*Block)
 	return newFunction(fnTok, params, block)
 }

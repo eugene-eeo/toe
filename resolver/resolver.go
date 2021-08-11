@@ -140,10 +140,11 @@ func (r *Resolver) resolve(node parser.Node) {
 	case *parser.Identifier:
 		r.resolveIdentifier(node)
 	case *parser.Literal:
-		// nothing to resolve.
 		return
 	case *parser.Array:
 		r.resolveArray(node)
+	case *parser.Hash:
+		r.resolveHash(node)
 	case *parser.Function:
 		r.resolveFunction(node)
 	case *parser.Super:
@@ -284,6 +285,13 @@ func (r *Resolver) resolveIdentifier(node *parser.Identifier) {
 func (r *Resolver) resolveArray(node *parser.Array) {
 	for _, expr := range node.Exprs {
 		r.resolve(expr)
+	}
+}
+
+func (r *Resolver) resolveHash(node *parser.Hash) {
+	for _, pair := range node.Pairs {
+		r.resolve(pair.Key)
+		r.resolve(pair.Value)
 	}
 }
 

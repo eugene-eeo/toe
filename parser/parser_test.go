@@ -50,6 +50,11 @@ func TestParserValid(t *testing.T) {
 		{"[1,nil,true,false,[1,3,4]].x;", "([1, nil, true, false, [1, 3, 4]].x);"},
 		{"[1+2,];", "[(1 + 2)];"},
 		{"[1];", "[1];"},
+		{"{1:\"abc\"};", "{1: \"abc\"};"},
+		{"{1:\"abc\",};", "{1: \"abc\"};"},
+		{"{1:2,2:3,};", "{1: 2, 2: 3};"},
+		{"{1:2,2:3,4:nil};", "{1: 2, 2: 3, 4: nil};"},
+		{"{1:2,};", "{1: 2};"},
 	}
 	for i, test := range tests {
 		var tokens []lexer.Token
@@ -92,6 +97,8 @@ func TestParserInvalid(t *testing.T) {
 		{"fn(,){}", 1},
 		{"z(1,2,3,,);", 1},
 		{"f(1,", 1},
+		{"f(u,)", 1},
+		{"f(u,){", 1},
 		{"[1,2,3,,]", 1},
 	}
 	for i, test := range tests {

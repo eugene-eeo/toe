@@ -21,6 +21,7 @@ const (
 	VT_FUNCTION
 	VT_OBJECT
 	VT_ARRAY
+	VT_HASH
 	// Runtime Control
 	VT_BREAK
 	VT_CONTINUE
@@ -88,6 +89,18 @@ func newArray(values []Value) *Array {
 	}
 }
 
+type Hash struct {
+	*Object
+	table *hashTable
+}
+
+func newHash(ctx *Context) *Hash {
+	return &Hash{
+		Object: newObject(nil),
+		table:  newHashTable(ctx),
+	}
+}
+
 func (v Nil) Type() ValueType       { return VT_NIL }
 func (v Boolean) Type() ValueType   { return VT_BOOLEAN }
 func (v Number) Type() ValueType    { return VT_NUMBER }
@@ -95,6 +108,7 @@ func (v String) Type() ValueType    { return VT_STRING }
 func (v *Object) Type() ValueType   { return VT_OBJECT }
 func (v *Function) Type() ValueType { return VT_FUNCTION }
 func (v *Array) Type() ValueType    { return VT_ARRAY }
+func (v *Hash) Type() ValueType     { return VT_HASH }
 
 func (v Nil) String() string { return "nil" }
 func (v Boolean) String() string {
@@ -133,6 +147,27 @@ func (v *Array) String() string {
 		}
 	}
 	buf.WriteString("]")
+	return buf.String()
+}
+
+func (v *Hash) String() string {
+	var buf bytes.Buffer
+	buf.WriteString("{")
+	j := uint64(0)
+	size := v.table.size()
+	for i := 0; i < len(v.table.entries); i++ {
+		ref := &v.table.entries[i]
+		if ref.hasValue() {
+			j++
+			buf.WriteString(inspect(*ref.key))
+			buf.WriteString(": ")
+			buf.WriteString(inspect(*ref.value))
+			if j < size {
+				buf.WriteString(", ")
+			}
+		}
+	}
+	buf.WriteString("}")
 	return buf.String()
 }
 

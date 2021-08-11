@@ -67,7 +67,7 @@ func TestHashTable(t *testing.T) {
 
 func TestHashTableKeyTypes(t *testing.T) {
 	pairs := []struct {
-		k Hashable
+		k Value
 		v Value
 	}{
 		{NIL, newObject(nil)},
@@ -92,13 +92,13 @@ func TestHashTableKeyTypes(t *testing.T) {
 	}
 }
 
-func mustInsert(t *testing.T, ht *hashTable, k Hashable, v Value) {
+func mustInsert(t *testing.T, ht *hashTable, k Value, v Value) {
 	if err := ht.insert(k, v); err != nil {
 		t.Fatalf("unexpected insertion error=%#v", err)
 	}
 }
 
-func mustGet(t *testing.T, ht *hashTable, k Hashable) Value {
+func mustGet(t *testing.T, ht *hashTable, k Value) Value {
 	value, found, err := ht.get(k)
 	if !found {
 		t.Fatalf("expected key %#v to be in hash table", k)
@@ -109,7 +109,7 @@ func mustGet(t *testing.T, ht *hashTable, k Hashable) Value {
 	return value
 }
 
-func mustDelete(t *testing.T, ht *hashTable, k Hashable) {
+func mustDelete(t *testing.T, ht *hashTable, k Value) {
 	found, err := ht.delete(k)
 	if !found {
 		if err != nil {

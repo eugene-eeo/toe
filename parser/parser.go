@@ -73,6 +73,7 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.SLASH:         p.binary,
 		lexer.DOT:           p.get,
 		lexer.LEFT_PAREN:    p.call,
+		lexer.LEFT_BRACKET:  p.index,
 	}
 	p.precedences = map[lexer.TokenType]int{
 		lexer.EQUAL:         PREC_ASSIGN,
@@ -366,6 +367,8 @@ func (p *Parser) assign(left Expr) Expr {
 	switch left := left.(type) {
 	case *Get:
 		return newSet(left.Object, left.Name, right)
+	case *GetIndex:
+		return newSetIndex(left.Object, left.LBracket, left.Index, right)
 	case *Identifier:
 		return newAssign(left.Id, right)
 	default:
@@ -472,6 +475,13 @@ func (p *Parser) call(left Expr) Expr {
 	default:
 		return newCall(left, lParenTok, args)
 	}
+}
+
+func (p *Parser) index(left Expr) Expr {
+	lBracket := p.consume()
+	index := p.expression()
+	p.expect(lexer.RIGHT_BRACKET, "unclosed '['")
+	return newGetIndex(left, lBracket, index)
 }
 
 func (p *Parser) super() Expr {

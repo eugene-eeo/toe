@@ -283,14 +283,14 @@ func (node *Call) node() {}
 func (node *Call) expr() {}
 
 type GetIndex struct {
-	Left     Expr
+	Object   Expr
 	LBracket lexer.Token
 	Index    Expr
 }
 
-func newGetIndex(Left Expr, LBracket lexer.Token, Index Expr) *GetIndex {
+func newGetIndex(Object Expr, LBracket lexer.Token, Index Expr) *GetIndex {
 	return &GetIndex{
-		Left:     Left,
+		Object:   Object,
 		LBracket: LBracket,
 		Index:    Index,
 	}
@@ -299,15 +299,15 @@ func (node *GetIndex) node() {}
 func (node *GetIndex) expr() {}
 
 type SetIndex struct {
-	Left     Expr
+	Object   Expr
 	LBracket lexer.Token
 	Index    Expr
 	Right    Expr
 }
 
-func newSetIndex(Left Expr, LBracket lexer.Token, Index Expr, Right Expr) *SetIndex {
+func newSetIndex(Object Expr, LBracket lexer.Token, Index Expr, Right Expr) *SetIndex {
 	return &SetIndex{
-		Left:     Left,
+		Object:   Object,
 		LBracket: LBracket,
 		Index:    Index,
 		Right:    Right,

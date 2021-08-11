@@ -41,14 +41,39 @@ func initBinOpTable() {
 		{lexer.GREATER,       VT_STRING, VT_STRING, func(ctx *Context, a, b Value) Value { return Boolean(a.(String) > b.(String)) }},
 		{lexer.GREATER_EQUAL, VT_STRING, VT_STRING, func(ctx *Context, a, b Value) Value { return Boolean(a.(String) >= b.(String)) }},
 		{lexer.PLUS,          VT_STRING, VT_STRING, func(ctx *Context, a, b Value) Value { return a.(String) + b.(String) }},
-		{lexer.STAR,          VT_STRING, VT_NUMBER, func(ctx *Context, a, b Value) Value {
-			return String(strings.Repeat(string(a.(String)), int(b.(Number))))
+		{lexer.STAR,          VT_STRING, VT_NUMBER, func(ctx *Context, a, b Value) Value { return String(strings.Repeat(string(a.(String)), int(b.(Number)))) }},
+		{lexer.LEFT_BRACKET,  VT_STRING, VT_NUMBER, func(ctx *Context, a, b Value) Value {
+			str := a.(String)
+			idx := int(b.(Number))
+			if 0 < idx && idx < len(str) {
+				return String(str[idx])
+			}
+			return newError(String("string index out of bounds"))
 		}},
 		// Array Operations
-		{lexer.EQUAL_EQUAL, VT_ARRAY, VT_ARRAY, func(ctx *Context, a, b Value) Value { return bi_array_equal(ctx, a.(*Array), b.(*Array)) }},
-		{lexer.PLUS, VT_ARRAY, VT_ARRAY, func(ctx *Context, a, b Value) Value { return bi_array_concat_new(ctx, a.(*Array), b.(*Array)) }},
+		{lexer.EQUAL_EQUAL,  VT_ARRAY, VT_ARRAY,  func(ctx *Context, a, b Value) Value { return bi_array_equal(ctx,      a.(*Array), b.(*Array)) }},
+		{lexer.PLUS,         VT_ARRAY, VT_ARRAY,  func(ctx *Context, a, b Value) Value { return bi_array_concat_new(ctx, a.(*Array), b.(*Array)) }},
+		{lexer.LEFT_BRACKET, VT_ARRAY, VT_NUMBER, func(ctx *Context, a, b Value) Value {
+			arr := a.(*Array)
+			idx := int(b.(Number))
+			if 0 < idx && idx < len(arr.values) {
+				return arr.values[idx]
+			}
+			return newError(String("array index out of bounds"))
+		}},
 		// Hash Operations
-		{lexer.EQUAL_EQUAL, VT_HASH, VT_HASH, func(ctx *Context, a, b Value) Value { return bi_hash_equal(ctx, a.(*Hash), b.(*Hash)) }},
+		{lexer.EQUAL_EQUAL,  VT_HASH, VT_HASH, func(ctx *Context, a, b Value) Value { return bi_hash_equal(ctx, a.(*Hash), b.(*Hash)) }},
+		{lexer.LEFT_BRACKET, VT_HASH, VT_ANY,  func(ctx *Context, a, b Value) Value {
+			hash := a.(*Hash)
+			rv, found, err := hash.table.get(b)
+			if err != nil {
+				return err
+			}
+			if !found {
+				return newError(String("key not in hash"))
+			}
+			return rv
+		}},
 	}
 	for _, entry := range ops {
 		binOpTable[binOpInfo{entry.op, entry.left, entry.right}] = entry.impl
@@ -75,7 +100,7 @@ func bi_array_equal(ctx *Context, left, right *Array) Value {
 func bi_array_concat_new(ctx *Context, left, right *Array) Value {
 	l_sz := len(left.values)
 	r_sz := len(right.values)
-	values := make([]Value, l_sz + r_sz)
+	values := make([]Value, l_sz+r_sz)
 	copy(values, left.values)
 	copy(values[l_sz:], right.values)
 	return newArray(values)

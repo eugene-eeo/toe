@@ -117,10 +117,10 @@ func (f *Function) Bind(this Value) *Function {
 	}
 	// Lightweight wrapper around f that binds it to `this'
 	return &Function{
-		Object: f.Object,
-		node: f.node,
-		this: this,
-		closure: f.closure,
+		Object:   f.Object,
+		node:     f.node,
+		this:     this,
+		closure:  f.closure,
 		filename: f.filename,
 	}
 }
@@ -293,7 +293,15 @@ func (ctx *Context) binary(op lexer.TokenType, left, right Value) Value {
 // binaryDispatch searches the binary operations table for a corresponding
 // handler for the given values.
 func (ctx *Context) binaryDispatch(op lexer.TokenType, left, right Value) (Value, bool) {
-	info := binOpInfo{op, left.Type(), right.Type()}
+	var info binOpInfo
+	// First try the specific lookup
+	info = binOpInfo{op, left.Type(), right.Type()}
+	if impl, ok := binOpTable[info]; ok {
+		rv := impl(ctx, left, right)
+		return rv, true
+	}
+	// Now try a lookup with wildcard
+	info = binOpInfo{op, left.Type(), VT_ANY}
 	if impl, ok := binOpTable[info]; ok {
 		rv := impl(ctx, left, right)
 		return rv, true
@@ -301,7 +309,7 @@ func (ctx *Context) binaryDispatch(op lexer.TokenType, left, right Value) (Value
 	return nil, false
 }
 
-// areObjectsEqual returns TRUE if the two objects are equal, FALSE otherwise.
+// areObjectsEqual is a shortcut for binary(==, ...)
 func (ctx *Context) areObjectsEqual(left, right Value) Value {
 	return ctx.binary(lexer.EQUAL_EQUAL, left, right)
 }
@@ -313,12 +321,36 @@ func (ctx *Context) unary(op lexer.TokenType, right Value) Value {
 	case op == lexer.MINUS && right.Type() == VT_NUMBER:
 		return Number(-right.(Number))
 	}
-	err := newError(String(fmt.Sprintf(
+	return newError(String(fmt.Sprintf(
 		"unsupported operand for %q: %s",
 		op.String(),
 		right.Type().String(),
 	)))
-	return err
+}
+
+func (ctx *Context) setIndex(object Value, index Value, right Value) Value {
+	switch {
+	case object.Type() == VT_ARRAY && index.Type() == VT_NUMBER:
+		arr := object.(*Array)
+		idx := int(index.(Number))
+		if 0 < idx && idx < len(arr.values) {
+			arr.values[idx] = right
+			return right
+		}
+		return newError(String("array index out of bounds"))
+	case object.Type() == VT_HASH:
+		hash := object.(*Hash)
+		err := hash.table.insert(index, right)
+		if err != nil {
+			return err
+		}
+		return right
+	}
+	return newError(String(fmt.Sprintf(
+		"unsupported operands for []=: %s and %s",
+		object.Type().String(),
+		index.Type().String(),
+	)))
 }
 
 // =========

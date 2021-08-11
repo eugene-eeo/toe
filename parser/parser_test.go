@@ -41,6 +41,7 @@ func TestParserValid(t *testing.T) {
 		{"fn(a) { return 1; };", "fn(a){return 1;};"},
 		{"fn(a) { return; };", "fn(a){return;};"},
 		{"isEven(n);", "(isEven(n));"},
+		{"isEven(n) + b;", "((isEven(n)) + b);"},
 		{"isEven(1,);", "(isEven(1));"},
 		{"isEven(1,2,3,4,5,);", "(isEven(1, 2, 3, 4, 5));"},
 		{"isEven.call(n).this.that;", "(((isEven.call(n)).this).that);"},
@@ -54,6 +55,12 @@ func TestParserValid(t *testing.T) {
 		{"{1:2,2:3,};", "{1: 2, 2: 3};"},
 		{"{1:2,2:3,4:nil};", "{1: 2, 2: 3, 4: nil};"},
 		{"{1:2,};", "{1: 2};"},
+		{"a[1];", "(a[1]);"},
+		{"a[3][4][5];", "(((a[3])[4])[5]);"},
+		{"a[3].x[4].y()[5];", "(((((a[3]).x)[4]).y())[5]);"},
+		{"a[x[1].call()];", "(a[((x[1]).call())]);"},
+		{"a[1] = 2;", "(a[1] = 2);"},
+		{"a[1][2] = 2;", "((a[1])[2] = 2);"},
 	}
 	for i, test := range tests {
 		var tokens []lexer.Token
@@ -99,6 +106,8 @@ func TestParserInvalid(t *testing.T) {
 		{"f(u,)", 1},
 		{"f(u,){", 1},
 		{"[1,2,3,,]", 1},
+		{"x[", 1},
+		{"x[a", 1},
 	}
 	for i, test := range tests {
 		var tokens []lexer.Token

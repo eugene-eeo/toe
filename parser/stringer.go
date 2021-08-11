@@ -201,6 +201,29 @@ func (node *Call) String() string {
 	return buf.String()
 }
 
+func (node *GetIndex) String() string {
+	var buf bytes.Buffer
+	buf.WriteString("(")
+	buf.WriteString(node.Object.String())
+	buf.WriteString(node.LBracket.Lexeme)
+	buf.WriteString(node.Index.String())
+	buf.WriteString("]")
+	buf.WriteString(")")
+	return buf.String()
+}
+
+func (node *SetIndex) String() string {
+	var buf bytes.Buffer
+	buf.WriteString("(")
+	buf.WriteString(node.Object.String())
+	buf.WriteString(node.LBracket.Lexeme)
+	buf.WriteString(node.Index.String())
+	buf.WriteString("] = ")
+	buf.WriteString(node.Right.String())
+	buf.WriteString(")")
+	return buf.String()
+}
+
 func (node *Identifier) String() string { return node.Id.Lexeme }
 func (node *Literal) String() string    { return node.Lit.Lexeme }
 

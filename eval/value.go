@@ -13,6 +13,8 @@ type ValueType uint8
 
 const (
 	_ = ValueType(iota)
+	// Wildcard type for operator lookup
+	VT_ANY
 	// Real values
 	VT_NIL
 	VT_BOOLEAN

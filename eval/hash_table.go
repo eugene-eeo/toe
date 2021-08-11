@@ -32,10 +32,22 @@ var (
 	ht_FALSE_HASH = htHashConstant("false")
 )
 
+// htTruncateHash truncates the given uint64 into a number that
+// fits exactly into Number (float64). Golang's float64 is an
+// IEEE-754 double-precision format, so it can only store up to
+// 53 bits of integer precision:
+//
+//   https://en.wikipedia.org/wiki/Double-precision_floating-point_format#Precision_limitations_on_integer_values
+//
+func htTruncateHash(u uint64) Number {
+	var mask uint64 = (1 << 53) - 1
+	return Number(u & mask)
+}
+
 func htHashConstant(c string) Value {
 	h := fnv.New64a()
 	h.Write([]byte(c))
-	return Number(math.Float64frombits(h.Sum64()))
+	return htTruncateHash(h.Sum64())
 }
 
 func (v Nil) Hash() Value { return ht_NIL_HASH }
@@ -51,7 +63,7 @@ func (v String) Hash() Value {
 	h := fnv.New64a()
 	h.Write([]byte("S"))
 	h.Write([]byte(v))
-	return Number(math.Float64frombits(h.Sum64()))
+	return htTruncateHash(h.Sum64())
 }
 
 func (v Number) Hash() Value {
@@ -68,13 +80,13 @@ func (v Number) Hash() Value {
 	b[7] = (byte(floatbits >> 56 & 0xFF))
 	h.Write([]byte("N"))
 	h.Write(b[:])
-	return Number(math.Float64frombits(h.Sum64()))
+	return htTruncateHash(h.Sum64())
 }
 
 func (v *Function) Hash() Value {
 	h := fnv.New64a()
 	h.Write([]byte(fmt.Sprintf("F%p", v)))
-	return Number(math.Float64frombits(h.Sum64()))
+	return htTruncateHash(h.Sum64())
 }
 
 // =================

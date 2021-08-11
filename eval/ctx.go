@@ -82,6 +82,10 @@ func (ctx *Context) EvalExpr(node parser.Expr) Value {
 		return ctx.evalMethod(node)
 	case *parser.Call:
 		return ctx.evalCall(node)
+	case *parser.GetIndex:
+		return ctx.evalGetIndex(node)
+	case *parser.SetIndex:
+		return ctx.evalSetIndex(node)
 	case *parser.Identifier:
 		return ctx.evalIdentifier(node)
 	case *parser.Literal:
@@ -366,6 +370,42 @@ func (ctx *Context) evalCall(node *parser.Call) Value {
 	rv := ctx.call(callee, NIL, args)
 	if isError(rv) {
 		return ctx.addErrorStack(rv.(*Error), node.LParen)
+	}
+	return rv
+}
+
+func (ctx *Context) evalGetIndex(node *parser.GetIndex) Value {
+	object := ctx.EvalExpr(node.Object)
+	if isError(object) {
+		return object
+	}
+	index := ctx.EvalExpr(node.Index)
+	if isError(index) {
+		return index
+	}
+	rv := ctx.binary(node.LBracket.Type, object, index)
+	if isError(rv) {
+		return ctx.addErrorStack(rv.(*Error), node.LBracket)
+	}
+	return rv
+}
+
+func (ctx *Context) evalSetIndex(node *parser.SetIndex) Value {
+	right := ctx.EvalExpr(node.Right)
+	if isError(right) {
+		return right
+	}
+	object := ctx.EvalExpr(node.Object)
+	if isError(object) {
+		return object
+	}
+	index := ctx.EvalExpr(node.Index)
+	if isError(index) {
+		return index
+	}
+	rv := ctx.setIndex(object, index, right)
+	if isError(rv) {
+		return ctx.addErrorStack(rv.(*Error), node.LBracket)
 	}
 	return rv
 }

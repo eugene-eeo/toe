@@ -64,17 +64,16 @@ func newObject(proto Value) *Object {
 type Function struct {
 	*Object
 	node     *parser.Function
-	this     Value
 	closure  *environment
 	filename string
+	this     Value
 }
 
-func newFunction(filename string, node *parser.Function, this Value, env *environment) *Function {
+func newFunction(filename string, node *parser.Function, env *environment) *Function {
 	return &Function{
 		Object:   newObject(nil),
 		filename: filename,
 		node:     node,
-		this:     this,
 		closure:  env,
 	}
 }

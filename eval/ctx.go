@@ -335,7 +335,6 @@ func (ctx *Context) evalMethod(node *parser.Method) Value {
 	if isError(meth) {
 		return ctx.addErrorStack(meth.(*Error), node.Name)
 	}
-	meth = ctx.bind(meth, object)
 	args := make([]Value, len(node.Args))
 	for i, expr_node := range node.Args {
 		expr := ctx.EvalExpr(expr_node)
@@ -344,7 +343,7 @@ func (ctx *Context) evalMethod(node *parser.Method) Value {
 		}
 		args[i] = expr
 	}
-	rv := ctx.call(meth, args)
+	rv := ctx.call(meth, object, args)
 	if isError(rv) {
 		return ctx.addErrorStack(rv.(*Error), node.LParen)
 	}
@@ -364,7 +363,7 @@ func (ctx *Context) evalCall(node *parser.Call) Value {
 		}
 		args[i] = expr
 	}
-	rv := ctx.call(callee, args)
+	rv := ctx.call(callee, NIL, args)
 	if isError(rv) {
 		return ctx.addErrorStack(rv.(*Error), node.LParen)
 	}
@@ -415,7 +414,7 @@ func (ctx *Context) evalHash(node *parser.Hash) Value {
 
 func (ctx *Context) evalFunction(node *parser.Function) Value {
 	fn := ctx.stack[len(ctx.stack)-1].Filename()
-	return newFunction(fn, node, nil, ctx.env)
+	return newFunction(fn, node, ctx.env)
 }
 
 func (ctx *Context) evalSuper(node *parser.Super) Value {

@@ -103,21 +103,33 @@ func (ctx *Context) bind(obj Value, this Value) Value {
 	switch obj := obj.(type) {
 	case *Function:
 		return obj.Bind(this)
+	case *Builtin:
+		return obj.Bind(this)
 	}
 	return obj
 }
 
 func (f *Function) Bind(this Value) *Function {
-	// A bound function cannot be bound again. Note that this is different
-	// from (explicitly) binding to NIL.
+	// A bound function cannot be bound again. By checking if this == nil,
+	// we allow for explicitly binding to NIL.
 	if f.this != nil {
 		return f
 	}
-	// This means that we transfer the properties, but also give the new
-	// function it's own `namespace'.
-	bound := newFunction(f.filename, f.node, this, f.closure)
-	bound.Object.proto = f
-	return bound
+	// Lightweight wrapper around f that binds it to `this'
+	return &Function{
+		Object: f.Object,
+		node: f.node,
+		this: this,
+		closure: f.closure,
+		filename: f.filename,
+	}
+}
+
+func (b *Builtin) Bind(this Value) *Builtin {
+	if b.this != nil {
+		return b
+	}
+	return &Builtin{Object: b.Object, this: this, call: b.call}
 }
 
 // -------------
@@ -173,35 +185,30 @@ func (ctx *Context) setSlot(obj Value, name string, val Value) Value {
 // Function Calls
 // ==============
 
-func (ctx *Context) call(callee Value, args []Value) Value {
+func (ctx *Context) call(callee Value, this Value, args []Value) Value {
 	switch callee := callee.(type) {
 	case *Function:
-		return callee.Call(ctx, args)
+		return callee.Call(ctx, this, args)
 	case *Builtin:
-		return callee.Call(ctx, args)
+		return callee.Call(ctx, this, args)
 	}
 	err := newError(String("not a function"))
 	return err
 }
 
-func (f *Function) getThis() Value {
-	if f.this == nil {
-		return NIL
-	} else {
-		return f.this
-	}
-}
-
-func (f *Function) Call(ctx *Context, args []Value) Value {
+func (f *Function) Call(ctx *Context, this Value, args []Value) Value {
 	old_env := ctx.env
 	old_this := ctx.this
+	if f.this != nil {
+		this = f.this
+	}
 
 	ctx.env = f.closure
-	ctx.this = f.getThis()
+	ctx.this = this
 	ctx.pushEnv()
 	ctx.pushFunc(&functionCse{f})
 
-	ctx.env.set("this", ctx.this)
+	ctx.env.set("this", this)
 	for i, id := range f.node.Params {
 		name := id.Lexeme
 		if len(args) <= i {
@@ -224,10 +231,9 @@ func (f *Function) Call(ctx *Context, args []Value) Value {
 	return rv
 }
 
-func (b *Builtin) Call(ctx *Context, args []Value) Value {
-	this := b.this
-	if this == nil {
-		b.this = NIL
+func (b *Builtin) Call(ctx *Context, this Value, args []Value) Value {
+	if b.this != nil {
+		this = b.this
 	}
 	ctx.pushFunc(&builtinCse{b})
 	rv := b.call(ctx, this, args)
@@ -327,6 +333,5 @@ func (ctx *Context) bind_and_call(obj Value, name string, args []Value) Value {
 	if isError(fn) {
 		return fn
 	}
-	fn = ctx.bind(obj, fn)
-	return ctx.call(fn, args)
+	return ctx.call(fn, obj, args)
 }

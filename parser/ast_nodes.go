@@ -282,6 +282,40 @@ func newCall(Callee Expr, LParen lexer.Token, Args []Expr) *Call {
 func (node *Call) node() {}
 func (node *Call) expr() {}
 
+type GetIndex struct {
+	Left     Expr
+	LBracket lexer.Token
+	Index    Expr
+}
+
+func newGetIndex(Left Expr, LBracket lexer.Token, Index Expr) *GetIndex {
+	return &GetIndex{
+		Left:     Left,
+		LBracket: LBracket,
+		Index:    Index,
+	}
+}
+func (node *GetIndex) node() {}
+func (node *GetIndex) expr() {}
+
+type SetIndex struct {
+	Left     Expr
+	LBracket lexer.Token
+	Index    Expr
+	Right    Expr
+}
+
+func newSetIndex(Left Expr, LBracket lexer.Token, Index Expr, Right Expr) *SetIndex {
+	return &SetIndex{
+		Left:     Left,
+		LBracket: LBracket,
+		Index:    Index,
+		Right:    Right,
+	}
+}
+func (node *SetIndex) node() {}
+func (node *SetIndex) expr() {}
+
 type Identifier struct {
 	Id  lexer.Token
 	Loc int

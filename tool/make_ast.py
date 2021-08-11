@@ -130,6 +130,8 @@ if __name__ == '__main__':
             Struct('Set',        ['Object Expr', 'Name lexer.Token', 'Right Expr']),
             Struct('Method',     ['Object Expr', 'Name lexer.Token', 'LParen lexer.Token', 'Args []Expr']),
             Struct('Call',       ['Callee Expr', 'LParen lexer.Token', 'Args []Expr']),
+            Struct('GetIndex',   ['Left Expr', 'LBracket lexer.Token', 'Index Expr']),
+            Struct('SetIndex',   ['Left Expr', 'LBracket lexer.Token', 'Index Expr', 'Right Expr']),
             Struct('Identifier', ['Id lexer.Token'], extra_fields=['Loc int']),
             Struct('Literal',    ['Lit lexer.Token']),
             Struct('Array',      ['Exprs []Expr']),

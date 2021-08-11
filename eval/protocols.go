@@ -51,12 +51,34 @@ func (ai *ArrayIterator) Next() Value {
 	return rv
 }
 
+type HashIterator struct {
+	curr  int
+	valid uint64
+	hash  *Hash
+}
+
+func (hi *HashIterator) Close() Value { return NIL }
+func (hi *HashIterator) Done() Value  { return Boolean(hi.valid == hi.hash.table.size()) }
+func (hi *HashIterator) Next() Value {
+	ht := hi.hash.table
+	for i := hi.curr; i < len(ht.entries); i++ {
+		entry := &ht.entries[i]
+		if entry.hasValue() {
+			hi.valid++
+			return *entry.key
+		}
+	}
+	return NIL
+}
+
 func getIterator(v Value) (Iterator, bool) {
 	switch v := v.(type) {
 	case String:
 		return &StringIterator{s: v}, true
 	case *Array:
 		return &ArrayIterator{a: v}, true
+	case *Hash:
+		return &HashIterator{hash: v}, true
 	}
 	return nil, false
 }

@@ -21,14 +21,14 @@ func inspect(v Value) string {
 	var visit valueInspector
 	visit = func(v Value) string {
 		switch v := v.(type) {
-		case Stringer:
-			return v.String()
 		case inspectable:
 			if seen[v] {
 				return "(...)"
 			}
 			seen[v] = true
 			return v.inspect(visit)
+		case Stringer:
+			return v.String()
 		}
 		panic(fmt.Sprintf("cannot inspect: %#+v", v))
 	}

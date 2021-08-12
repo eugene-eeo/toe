@@ -12,8 +12,8 @@ type Context struct {
 	stack []callStackEntry
 	// the current environment we're executing.
 	env *environment
-	// if we're in a user-defined function, the object in which the currently
-	// executing function is found -- needed to implement super.
+	// the object in which the currently executing function is found,
+	// and the current `this` -- these are required to implement super.
 	whence Value
 	this Value
 	// for hash tables

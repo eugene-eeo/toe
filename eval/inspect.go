@@ -103,7 +103,7 @@ func (v *Function) String() string {
 	if v.this != nil {
 		isBound = " bound"
 	}
-	return fmt.Sprintf("[Function%s%s]", isBound, name)
+	return fmt.Sprintf("[Function%s%s %p]", isBound, name, v)
 }
 
 func (v *Object) String() string {

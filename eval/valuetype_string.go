@@ -8,16 +8,16 @@ func _() {
 	// An "invalid array index" compiler error signifies that the constant values have changed.
 	// Re-run the stringer command to generate them again.
 	var x [1]struct{}
-	_ = x[VT_ANY-1]
-	_ = x[VT_NIL-2]
-	_ = x[VT_BOOLEAN-3]
-	_ = x[VT_NUMBER-4]
-	_ = x[VT_STRING-5]
-	_ = x[VT_FUNCTION-6]
-	_ = x[VT_OBJECT-7]
-	_ = x[VT_ARRAY-8]
-	_ = x[VT_HASH-9]
-	_ = x[VT_BUILTIN-10]
+	_ = x[VT_NIL-1]
+	_ = x[VT_BOOLEAN-2]
+	_ = x[VT_NUMBER-3]
+	_ = x[VT_STRING-4]
+	_ = x[VT_FUNCTION-5]
+	_ = x[VT_OBJECT-6]
+	_ = x[VT_ARRAY-7]
+	_ = x[VT_HASH-8]
+	_ = x[VT_BUILTIN-9]
+	_ = x[VT_SUPER-10]
 	_ = x[VT_BREAK-11]
 	_ = x[VT_CONTINUE-12]
 	_ = x[VT_RETURN-13]
@@ -25,9 +25,9 @@ func _() {
 	_ = x[VT_TOMBSTONE-15]
 }
 
-const _ValueType_name = "VT_ANYVT_NILVT_BOOLEANVT_NUMBERVT_STRINGVT_FUNCTIONVT_OBJECTVT_ARRAYVT_HASHVT_BUILTINVT_BREAKVT_CONTINUEVT_RETURNVT_ERRORVT_TOMBSTONE"
+const _ValueType_name = "VT_NILVT_BOOLEANVT_NUMBERVT_STRINGVT_FUNCTIONVT_OBJECTVT_ARRAYVT_HASHVT_BUILTINVT_SUPERVT_BREAKVT_CONTINUEVT_RETURNVT_ERRORVT_TOMBSTONE"
 
-var _ValueType_index = [...]uint8{0, 6, 12, 22, 31, 40, 51, 60, 68, 75, 85, 93, 104, 113, 121, 133}
+var _ValueType_index = [...]uint8{0, 6, 16, 25, 34, 45, 54, 62, 69, 79, 87, 95, 106, 115, 123, 135}
 
 func (i ValueType) String() string {
 	i -= 1

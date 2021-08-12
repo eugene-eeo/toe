@@ -12,8 +12,6 @@ type ValueType uint8
 
 const (
 	_ = ValueType(iota)
-	// Wildcard type for operator lookup
-	VT_ANY
 	// Real values
 	VT_NIL
 	VT_BOOLEAN
@@ -25,6 +23,7 @@ const (
 	VT_HASH
 	VT_BUILTIN
 	// Runtime Control
+	VT_SUPER
 	VT_BREAK
 	VT_CONTINUE
 	VT_RETURN
@@ -55,15 +54,19 @@ type Object struct {
 	slots map[string]Value
 }
 
+func newSlots() map[string]Value {
+	return map[string]Value{}
+}
+
 func newObject(proto Value) *Object {
 	return &Object{
 		proto: proto,
-		slots: map[string]Value{},
+		slots: newSlots(),
 	}
 }
 
 type Function struct {
-	*Object
+	slots    map[string]Value
 	node     *parser.Function
 	closure  *environment
 	filename string
@@ -72,7 +75,7 @@ type Function struct {
 
 func newFunction(filename string, node *parser.Function, env *environment) *Function {
 	return &Function{
-		Object:   newObject(nil),
+		slots:    newSlots(),
 		filename: filename,
 		node:     node,
 		closure:  env,
@@ -80,35 +83,45 @@ func newFunction(filename string, node *parser.Function, env *environment) *Func
 }
 
 type Array struct {
-	*Object
+	slots  map[string]Value
 	values []Value
 }
 
 func newArray(values []Value) *Array {
 	return &Array{
-		Object: newObject(nil),
+		slots:  newSlots(),
 		values: values,
 	}
 }
 
 type Hash struct {
-	*Object
+	slots map[string]Value
 	table *hashTable
 }
 
 func newHash(ctx *Context) *Hash {
 	return &Hash{
-		Object: newObject(nil),
-		table:  newHashTable(ctx),
+		slots: newSlots(),
+		table: newHashTable(ctx),
 	}
 }
 
+type builtinFunc func(ctx *Context, this Value, args []Value) Value
+
 // Builtin represents a built-in function
 type Builtin struct {
-	*Object
-	name string
-	this Value
-	call func(ctx *Context, this Value, args []Value) Value
+	slots map[string]Value
+	name  string
+	this  Value
+	call  builtinFunc
+}
+
+func newBuiltin(name string, call builtinFunc) *Builtin {
+	return &Builtin{
+		slots: newSlots(),
+		name:  name,
+		call:  call,
+	}
 }
 
 func (v Nil) Type() ValueType       { return VT_NIL }
@@ -138,6 +151,7 @@ var (
 // Runtime Control
 // ===============
 
+type Super struct{ proto Value }
 type Break struct{}
 type Continue struct{}
 type Return struct{ value Value }
@@ -175,6 +189,7 @@ func (e *Error) String() string {
 	return buf.String()
 }
 
+func (v Super) Type() ValueType    { return VT_SUPER }
 func (v Break) Type() ValueType    { return VT_BREAK }
 func (v Continue) Type() ValueType { return VT_CONTINUE }
 func (v Return) Type() ValueType   { return VT_RETURN }

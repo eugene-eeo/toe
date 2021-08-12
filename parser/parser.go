@@ -73,7 +73,6 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.SLASH:         p.binary,
 		lexer.DOT:           p.get,
 		lexer.LEFT_PAREN:    p.call,
-		lexer.LEFT_BRACKET:  p.index,
 	}
 	p.precedences = map[lexer.TokenType]int{
 		lexer.EQUAL:         PREC_ASSIGN,
@@ -91,7 +90,6 @@ func New(fn string, tokens []lexer.Token) *Parser {
 		lexer.SLASH:         PREC_PRODUCT,
 		lexer.DOT:           PREC_CALL,
 		lexer.LEFT_PAREN:    PREC_CALL,
-		lexer.LEFT_BRACKET:  PREC_CALL,
 	}
 	return p
 }
@@ -324,7 +322,7 @@ func (p *Parser) exprStmt() Stmt {
 // function → "fn" "(" params ")" block
 // params   → IDENTIFIER ( "," params )? | ε
 // array    → "[" args "]"
-// super    → "super" "." IDENTIFIER
+// super    → "super" "." IDENTIFIER ( "(" args ")" )?
 // hash     → "{" pairs "}"
 // pairs    → expr ":" expr ("," pairs)? | ε
 
@@ -367,8 +365,6 @@ func (p *Parser) assign(left Expr) Expr {
 	switch left := left.(type) {
 	case *Get:
 		return newSet(left.Object, left.Name, right)
-	case *GetIndex:
-		return newSetIndex(left.Object, left.LBracket, left.Index, right)
 	case *Identifier:
 		return newAssign(left.Id, right)
 	default:
@@ -477,21 +473,7 @@ func (p *Parser) call(left Expr) Expr {
 	}
 }
 
-func (p *Parser) index(left Expr) Expr {
-	lBracket := p.consume()
-	index := p.expression()
-	p.expect(lexer.RIGHT_BRACKET, "unclosed '['")
-	return newGetIndex(left, lBracket, index)
-}
-
 func (p *Parser) super() Expr {
 	superToken := p.consume()
-	p.expect(lexer.DOT, "expect '.' after 'super'")
-	dot := p.previous()
-	name := p.consume()
-	switch name.Type {
-	case lexer.IDENTIFIER, lexer.NIL, lexer.TRUE, lexer.FALSE:
-		return newSuper(superToken, name)
-	}
-	panic(p.error(name, "expected a name after %q", dot.Lexeme))
+	return p.get(newSuper(superToken))
 }

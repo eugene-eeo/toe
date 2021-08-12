@@ -99,37 +99,22 @@ func getIterator(v Value) (Iterator, bool) {
 // Binding
 // -------
 
-func (ctx *Context) bind(obj Value, this Value) Value {
-	switch obj := obj.(type) {
-	case *Function:
-		return obj.Bind(this)
-	case *Builtin:
-		return obj.Bind(this)
-	}
-	return obj
-}
-
 func (f *Function) Bind(this Value) *Function {
 	// A bound function cannot be bound again. By checking if this == nil,
 	// we allow for explicitly binding to NIL.
 	if f.this != nil {
 		return f
 	}
-	// Lightweight wrapper around f that binds it to `this'
-	return &Function{
-		Object:   f.Object,
-		node:     f.node,
-		this:     this,
-		closure:  f.closure,
-		filename: f.filename,
-	}
+	g := newFunction(f.filename, f.node, f.closure)
+	g.this = this
+	return g
 }
 
 func (b *Builtin) Bind(this Value) *Builtin {
 	if b.this != nil {
 		return b
 	}
-	return &Builtin{Object: b.Object, this: this, call: b.call}
+	return &Builtin{slots: newSlots(), this: this, call: b.call}
 }
 
 // -------------
@@ -138,10 +123,37 @@ func (b *Builtin) Bind(this Value) *Builtin {
 
 func (ctx *Context) getPrototype(obj Value) Value {
 	switch obj := obj.(type) {
+	case Nil:
+		return nil
+	case Boolean:
+		return ctx.globals.Boolean
+	case Number:
+		return ctx.globals.Number
+	case *Array:
+		return ctx.globals.Array
+	case *Hash:
+		return ctx.globals.Hash
 	case *Object:
 		return obj.proto
 	case *Function:
-		return obj.proto
+		return ctx.globals.Function
+	case *Builtin:
+		return ctx.globals.Function
+	}
+	return nil
+}
+
+// getSpecial is used to search the prototype chain for an object
+// matching the given internal Value type. This has the effect of
+// treating builtin objects as some special field. This is useful
+// for e.g. if users want to subtype builtin objects. If the return
+// value is nil, then the search is unsuccessful.
+func (ctx *Context) getSpecial(obj Value, typ ValueType) Value {
+	for obj != nil {
+		if obj.Type() == typ {
+			return obj
+		}
+		obj = ctx.getPrototype(obj)
 	}
 	return nil
 }
@@ -150,31 +162,46 @@ func (ctx *Context) getPrototype(obj Value) Value {
 // Get Slot
 // --------
 
-func (ctx *Context) getSlot(obj Value, name string) Value {
+// maybeGetSlot fetches the slot $obj.$name, traversing the prototype chain, and
+// returning nil if not found.
+func (ctx *Context) maybeGetSlot(obj Value, name string, whence *Value) Value {
 	for obj != nil {
-		if obj_ho, ok := obj.(hasObject); ok {
-			if v, ok := obj_ho.object().slots[name]; ok {
+		if obj_slots, ok := obj.(hasSlots); ok {
+			if v, ok := obj_slots.getSlots()[name]; ok {
+				*whence = obj
 				return v
 			}
 		}
 		obj = ctx.getPrototype(obj)
 	}
-	err := newError(String(fmt.Sprintf("object has no slot %q", name)))
-	return err
+	return nil
 }
 
-type hasObject interface{ object() *Object }
+// getSlot uses maybeGetSlot internally, but returns an error if the slot is
+// not found.
+func (ctx *Context) getSlot(obj Value, name string, whence *Value) Value {
+	rv := ctx.maybeGetSlot(obj, name, whence)
+	if rv == nil {
+		err := newError(String(fmt.Sprintf("object has no slot %q", name)))
+		return err
+	}
+	return rv
+}
 
-func (o *Object) object() *Object { return o }
+type hasSlots interface{ getSlots() map[string]Value }
+
+func (o *Object) getSlots() map[string]Value   { return o.slots }
+func (f *Function) getSlots() map[string]Value { return f.slots }
+func (b *Builtin) getSlots() map[string]Value  { return b.slots }
 
 // --------
 // Set Slot
 // --------
 
 func (ctx *Context) setSlot(obj Value, name string, val Value) Value {
-	if obj_ho, ok := obj.(hasObject); ok {
-		oo := obj_ho.object()
-		oo.slots[name] = val
+	if obj_slots, ok := obj.(hasSlots); ok {
+		slots := obj_slots.getSlots()
+		slots[name] = val
 		return val
 	}
 	err := newError(String(fmt.Sprintf("cannot set slot %q on object", name)))
@@ -185,15 +212,19 @@ func (ctx *Context) setSlot(obj Value, name string, val Value) Value {
 // Function Calls
 // ==============
 
-func (ctx *Context) call(callee Value, this Value, args []Value) Value {
+func (ctx *Context) call(whence Value, callee Value, this Value, args []Value) (rv Value) {
+	old_whence := ctx.whence
+	ctx.whence = whence
 	switch callee := callee.(type) {
 	case *Function:
-		return callee.Call(ctx, this, args)
+		rv = callee.Call(ctx, this, args)
 	case *Builtin:
-		return callee.Call(ctx, this, args)
+		rv = callee.Call(ctx, this, args)
+	default:
+		rv = newError(String("not a function"))
 	}
-	err := newError(String("not a function"))
-	return err
+	ctx.whence = old_whence
+	return
 }
 
 func (f *Function) Call(ctx *Context, this Value, args []Value) Value {
@@ -232,11 +263,14 @@ func (f *Function) Call(ctx *Context, this Value, args []Value) Value {
 }
 
 func (b *Builtin) Call(ctx *Context, this Value, args []Value) Value {
+	old_this := ctx.this
 	if b.this != nil {
 		this = b.this
 	}
 	ctx.pushFunc(&builtinCse{b})
+	ctx.this = this
 	rv := b.call(ctx, this, args)
+	ctx.this = old_this
 	ctx.popFunc()
 	return rv
 }
@@ -245,73 +279,17 @@ func (b *Builtin) Call(ctx *Context, this Value, args []Value) Value {
 // Operators
 // =========
 
-func (ctx *Context) binary(op lexer.TokenType, left, right Value) Value {
-	// Fast case for ==, != cannot be fast-cased...
-	if op == lexer.EQUAL_EQUAL && left == right {
+func (ctx *Context) binary(op string, left, right Value) Value {
+	// Fast case for ==
+	if op == "==" && left == right {
 		return TRUE
 	}
-	// Search the operator table.
-	rv, ok := ctx.binaryDispatch(op, left, right)
-	if !ok {
-		// Try to see if we can find a logical alternative.
-		// For example, a != b === !(a == b). Note that here we _cannot_
-		// use binary(...) again.
-		switch op {
-		// == and != falls back to pointer equality
-		case lexer.EQUAL_EQUAL:
-			altRv, altOk := ctx.binaryDispatch(lexer.BANG_EQUAL, left, right)
-			if altOk {
-				if isError(altRv) {
-					return altRv
-				} else {
-					return Boolean(!isTruthy(altRv))
-				}
-			}
-			return Boolean(left == right)
-		case lexer.BANG_EQUAL:
-			altRv, altOk := ctx.binaryDispatch(lexer.EQUAL_EQUAL, left, right)
-			if altOk {
-				if isError(altRv) {
-					return altRv
-				} else {
-					return Boolean(!isTruthy(altRv))
-				}
-			}
-			return Boolean(left != right)
-		}
-		// There really is no implementation.
-		return newError(String(fmt.Sprintf(
-			"unsupported operands for %q: %s and %s",
-			op.String(),
-			left.Type().String(),
-			right.Type().String(),
-		)))
-	}
-	return rv
-}
-
-// binaryDispatch searches the binary operations table for a corresponding
-// handler for the given values.
-func (ctx *Context) binaryDispatch(op lexer.TokenType, left, right Value) (Value, bool) {
-	var info binOpInfo
-	// First try the specific lookup
-	info = binOpInfo{op, left.Type(), right.Type()}
-	if impl, ok := binOpTable[info]; ok {
-		rv := impl(ctx, left, right)
-		return rv, true
-	}
-	// Now try a lookup with wildcard
-	info = binOpInfo{op, left.Type(), VT_ANY}
-	if impl, ok := binOpTable[info]; ok {
-		rv := impl(ctx, left, right)
-		return rv, true
-	}
-	return nil, false
+	return ctx.call_method(left, op, []Value{right})
 }
 
 // areObjectsEqual is a shortcut for binary(==, ...)
 func (ctx *Context) areObjectsEqual(left, right Value) Value {
-	return ctx.binary(lexer.EQUAL_EQUAL, left, right)
+	return ctx.binary("==", left, right)
 }
 
 func (ctx *Context) unary(op lexer.TokenType, right Value) Value {
@@ -328,42 +306,29 @@ func (ctx *Context) unary(op lexer.TokenType, right Value) Value {
 	)))
 }
 
-func (ctx *Context) setIndex(object Value, index Value, right Value) Value {
-	switch {
-	case object.Type() == VT_ARRAY && index.Type() == VT_NUMBER:
-		arr := object.(*Array)
-		idx := int(index.(Number))
-		if 0 < idx && idx < len(arr.values) {
-			arr.values[idx] = right
-			return right
-		}
-		return newError(String("array index out of bounds"))
-	case object.Type() == VT_HASH:
-		hash := object.(*Hash)
-		err := hash.table.insert(index, right)
-		if err != nil {
-			return err
-		}
-		return right
-	}
-	return newError(String(fmt.Sprintf(
-		"unsupported operands for []=: %s and %s",
-		object.Type().String(),
-		index.Type().String(),
-	)))
-}
-
 // =========
 // Utilities
 // =========
 
-// bind_and_call is a utility method to call $obj.$name, binding
+// call_method is a utility method to call $obj.$name, binding
 // it at the same time -- this can be used as the base for future
 // protocols (e.g. object iter).
-func (ctx *Context) bind_and_call(obj Value, name string, args []Value) Value {
-	fn := ctx.getSlot(obj, name)
+func (ctx *Context) call_method(obj Value, name string, args []Value) Value {
+	var whence Value
+	fn := ctx.getSlot(obj, name, &whence)
 	if isError(fn) {
 		return fn
 	}
-	return ctx.call(fn, obj, args)
+	return ctx.call(whence, fn, obj, args)
+}
+
+// forward forwards the call `name` up the prototype chain.
+func (ctx *Context) forward(obj Value, name string, args []Value) Value {
+	fmt.Printf("fwd %#v\n", obj)
+	var whence Value
+	fn := ctx.getSlot(ctx.getPrototype(ctx.whence), name, &whence)
+	if isError(fn) {
+		return fn
+	}
+	return ctx.call(whence, fn, obj, args)
 }

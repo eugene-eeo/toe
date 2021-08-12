@@ -282,40 +282,6 @@ func newCall(Callee Expr, LParen lexer.Token, Args []Expr) *Call {
 func (node *Call) node() {}
 func (node *Call) expr() {}
 
-type GetIndex struct {
-	Object   Expr
-	LBracket lexer.Token
-	Index    Expr
-}
-
-func newGetIndex(Object Expr, LBracket lexer.Token, Index Expr) *GetIndex {
-	return &GetIndex{
-		Object:   Object,
-		LBracket: LBracket,
-		Index:    Index,
-	}
-}
-func (node *GetIndex) node() {}
-func (node *GetIndex) expr() {}
-
-type SetIndex struct {
-	Object   Expr
-	LBracket lexer.Token
-	Index    Expr
-	Right    Expr
-}
-
-func newSetIndex(Object Expr, LBracket lexer.Token, Index Expr, Right Expr) *SetIndex {
-	return &SetIndex{
-		Object:   Object,
-		LBracket: LBracket,
-		Index:    Index,
-		Right:    Right,
-	}
-}
-func (node *SetIndex) node() {}
-func (node *SetIndex) expr() {}
-
 type Identifier struct {
 	Id  lexer.Token
 	Loc int
@@ -385,14 +351,12 @@ func (node *Function) node() {}
 func (node *Function) expr() {}
 
 type Super struct {
-	Tok  lexer.Token
-	Name lexer.Token
+	Tok lexer.Token
 }
 
-func newSuper(Tok lexer.Token, Name lexer.Token) *Super {
+func newSuper(Tok lexer.Token) *Super {
 	return &Super{
-		Tok:  Tok,
-		Name: Name,
+		Tok: Tok,
 	}
 }
 func (node *Super) node() {}

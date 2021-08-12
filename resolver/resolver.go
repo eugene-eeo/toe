@@ -139,10 +139,6 @@ func (r *Resolver) resolve(node parser.Node) {
 		r.resolveMethod(node)
 	case *parser.Call:
 		r.resolveCall(node)
-	case *parser.GetIndex:
-		r.resolveGetIndex(node)
-	case *parser.SetIndex:
-		r.resolveSetIndex(node)
 	case *parser.Identifier:
 		r.resolveIdentifier(node)
 	case *parser.Literal:
@@ -289,17 +285,6 @@ func (r *Resolver) resolveCall(node *parser.Call) {
 	for _, arg := range node.Args {
 		r.resolve(arg)
 	}
-}
-
-func (r *Resolver) resolveGetIndex(node *parser.GetIndex) {
-	r.resolve(node.Object)
-	r.resolve(node.Index)
-}
-
-func (r *Resolver) resolveSetIndex(node *parser.SetIndex) {
-	r.resolve(node.Right)
-	r.resolve(node.Object)
-	r.resolve(node.Index)
 }
 
 func (r *Resolver) resolveIdentifier(node *parser.Identifier) {

@@ -1,112 +1,17 @@
 package eval
 
 import (
-	"strings"
-	"toe/lexer"
+	"fmt"
+	"toe/resolver"
 )
 
-// =========
-// Operators
-// =========
+// =================
+// Builtin functions
+// =================
 
-// binOpInfo represents a binary op entry -- when we execute binary operations
-// we search the table using the (internal) types of both objects.
-type binOpInfo struct {
-	op          lexer.TokenType
-	left, right ValueType
-}
-
-type binOpImpl func(ctx *Context, left, right Value) Value
-
-var binOpTable = map[binOpInfo]binOpImpl{}
-
-func initBinOpTable() {
-	ops := []struct {
-		op          lexer.TokenType
-		left, right ValueType
-		impl        binOpImpl
-	}{
-		// Numbers
-		{lexer.LESS,          VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return Boolean(a.(Number) < b.(Number)) }},
-		{lexer.LESS_EQUAL,    VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return Boolean(a.(Number) <= b.(Number)) }},
-		{lexer.GREATER,       VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return Boolean(a.(Number) > b.(Number)) }},
-		{lexer.GREATER_EQUAL, VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return Boolean(a.(Number) >= b.(Number)) }},
-		{lexer.PLUS,          VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return a.(Number) + b.(Number) }},
-		{lexer.MINUS,         VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return a.(Number) - b.(Number) }},
-		{lexer.SLASH,         VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return a.(Number) / b.(Number) }},
-		{lexer.STAR,          VT_NUMBER, VT_NUMBER, func(ctx *Context, a, b Value) Value { return a.(Number) * b.(Number) }},
-		// String Operations
-		{lexer.LESS,          VT_STRING, VT_STRING, func(ctx *Context, a, b Value) Value { return Boolean(a.(String) < b.(String)) }},
-		{lexer.LESS_EQUAL,    VT_STRING, VT_STRING, func(ctx *Context, a, b Value) Value { return Boolean(a.(String) <= b.(String)) }},
-		{lexer.GREATER,       VT_STRING, VT_STRING, func(ctx *Context, a, b Value) Value { return Boolean(a.(String) > b.(String)) }},
-		{lexer.GREATER_EQUAL, VT_STRING, VT_STRING, func(ctx *Context, a, b Value) Value { return Boolean(a.(String) >= b.(String)) }},
-		{lexer.PLUS,          VT_STRING, VT_STRING, func(ctx *Context, a, b Value) Value { return a.(String) + b.(String) }},
-		{lexer.STAR,          VT_STRING, VT_NUMBER, func(ctx *Context, a, b Value) Value { return String(strings.Repeat(string(a.(String)), int(b.(Number)))) }},
-		{lexer.LEFT_BRACKET,  VT_STRING, VT_NUMBER, func(ctx *Context, a, b Value) Value {
-			str := a.(String)
-			idx := int(b.(Number))
-			if 0 < idx && idx < len(str) {
-				return String(str[idx])
-			}
-			return newError(String("string index out of bounds"))
-		}},
-		// Array Operations
-		{lexer.EQUAL_EQUAL,  VT_ARRAY, VT_ARRAY,  func(ctx *Context, a, b Value) Value { return bi_array_equal(ctx,      a.(*Array), b.(*Array)) }},
-		{lexer.PLUS,         VT_ARRAY, VT_ARRAY,  func(ctx *Context, a, b Value) Value { return bi_array_concat_new(ctx, a.(*Array), b.(*Array)) }},
-		{lexer.LEFT_BRACKET, VT_ARRAY, VT_NUMBER, func(ctx *Context, a, b Value) Value {
-			arr := a.(*Array)
-			idx := int(b.(Number))
-			if 0 < idx && idx < len(arr.values) {
-				return arr.values[idx]
-			}
-			return newError(String("array index out of bounds"))
-		}},
-		// Hash Operations
-		{lexer.EQUAL_EQUAL,  VT_HASH, VT_HASH, func(ctx *Context, a, b Value) Value { return bi_hash_equal(ctx, a.(*Hash), b.(*Hash)) }},
-		{lexer.LEFT_BRACKET, VT_HASH, VT_ANY,  func(ctx *Context, a, b Value) Value {
-			hash := a.(*Hash)
-			rv, found, err := hash.table.get(b)
-			if err != nil {
-				return err
-			}
-			if !found {
-				return newError(String("key not in hash"))
-			}
-			return rv
-		}},
-	}
-	for _, entry := range ops {
-		binOpTable[binOpInfo{entry.op, entry.left, entry.right}] = entry.impl
-	}
-}
-
-func bi_array_equal(ctx *Context, left, right *Array) Value {
-	if len(left.values) != len(right.values) {
-		return FALSE
-	}
-	for i, lhs := range left.values {
-		rhs := right.values[i]
-		rv := ctx.areObjectsEqual(lhs, rhs)
-		if isError(rv) {
-			return rv
-		}
-		if !isTruthy(rv) {
-			return FALSE
-		}
-	}
-	return TRUE
-}
-
-func bi_array_concat_new(ctx *Context, left, right *Array) Value {
-	l_sz := len(left.values)
-	r_sz := len(right.values)
-	values := make([]Value, l_sz+r_sz)
-	copy(values, left.values)
-	copy(values[l_sz:], right.values)
-	return newArray(values)
-}
-
-func bi_hash_equal(ctx *Context, left, right *Hash) Value {
+func bi_hash_equal(ctx *Context, a, b Value) Value {
+	left := a.(*Hash)
+	right := b.(*Hash)
 	if left.table.size() != right.table.size() {
 		return FALSE
 	}
@@ -131,4 +36,257 @@ func bi_hash_equal(ctx *Context, left, right *Hash) Value {
 		}
 	}
 	return TRUE
+}
+
+// ----
+// puts
+// ----
+
+func bi_puts(ctx *Context, this Value, args []Value) Value {
+	for _, obj := range args {
+		fmt.Println(obj.(Stringer).String())
+	}
+	return NIL
+}
+
+// ------
+// Object
+// ------
+
+func bi_Object_proto(ctx *Context, this Value, args []Value) Value {
+	rv := ctx.getPrototype(this)
+	if rv == nil {
+		return NIL
+	}
+	return rv
+}
+
+func bi_Object_clone(ctx *Context, this Value, args []Value) Value {
+	rv := newObject(this)
+	// do we have an init slot?
+	var whence Value
+	slot := ctx.maybeGetSlot(rv, "init", &whence)
+	if slot != nil {
+		// yes: forward all arguments to the init method.
+		res := ctx.call(whence, slot, rv, args)
+		if isError(res) {
+			return res
+		}
+	}
+	return rv
+}
+
+func bi_Object_is_a(ctx *Context, this Value, args []Value) Value {
+	// Does the given object appear anywhere on my prototype chain?
+	if err := expectNArgs(args, 1); err != nil {
+		return err
+	}
+	query := args[0]
+	for this != nil {
+		if this == query {
+			return TRUE
+		}
+		this = ctx.getPrototype(this)
+	}
+	return FALSE
+}
+
+// ----------------
+// Object Operators
+// ----------------
+
+func bi_Object_eq(ctx *Context, this Value, args []Value) Value {
+	if err := expectNArgs(args, 1); err != nil {
+		return err
+	}
+	return Boolean(this == args[0])
+}
+
+func bi_Object_neq(ctx *Context, this Value, args []Value) Value {
+	rv := ctx.call_method(this, "==", args)
+	if isError(rv) {
+		return rv
+	}
+	return Boolean(!isTruthy(rv))
+}
+
+// --------
+// Function
+// --------
+
+func bi_Function_bind(ctx *Context, this Value, args []Value) Value {
+	if err := expectNArgs(args, 1); err != nil {
+		return err
+	}
+	target := args[0]
+	switch this := this.(type) {
+	case *Function:
+		return this.Bind(target)
+	case *Builtin:
+		return this.Bind(target)
+	}
+	return newError(String(fmt.Sprintf("invalid receiver type %s", this.Type())))
+}
+
+// -----
+// Error
+// -----
+
+func bi_Error_throw(ctx *Context, this Value, args []Value) Value {
+	return newError(this)
+}
+
+// ------
+// Number
+// ------
+
+func bi_Number_plus(ctx *Context, left, right Value) Value { return left.(Number) + right.(Number) }
+func bi_Number_minus(ctx *Context, left, right Value) Value { return left.(Number) - right.(Number) }
+func bi_Number_times(ctx *Context, left, right Value) Value { return left.(Number) * right.(Number) }
+func bi_Number_divide(ctx *Context, left, right Value) Value { return left.(Number) / right.(Number) }
+func bi_Number_gt(ctx *Context, left, right Value) Value { return Boolean(left.(Number) > right.(Number)) }
+func bi_Number_geq(ctx *Context, left, right Value) Value { return Boolean(left.(Number) >= right.(Number)) }
+func bi_Number_lt(ctx *Context, left, right Value) Value { return Boolean(left.(Number) < right.(Number)) }
+func bi_Number_leq(ctx *Context, left, right Value) Value { return Boolean(left.(Number) <= right.(Number)) }
+
+// ------
+// String
+// ------
+
+func bi_String_plus(ctx *Context, left, right Value) Value { return left.(String) + right.(String) }
+func bi_String_gt(ctx *Context, left, right Value) Value { return Boolean(left.(String) > right.(String)) }
+func bi_String_geq(ctx *Context, left, right Value) Value { return Boolean(left.(String) >= right.(String)) }
+func bi_String_lt(ctx *Context, left, right Value) Value { return Boolean(left.(String) < right.(String)) }
+func bi_String_leq(ctx *Context, left, right Value) Value { return Boolean(left.(String) <= right.(String)) }
+
+// -----
+// Array
+// -----
+
+func bi_array_equal(ctx *Context, a, b Value) Value {
+	left := a.(*Array)
+	right := b.(*Array)
+	if len(left.values) != len(right.values) {
+		return FALSE
+	}
+	for i, lhs := range left.values {
+		rhs := right.values[i]
+		rv := ctx.areObjectsEqual(lhs, rhs)
+		if isError(rv) {
+			return rv
+		}
+		if !isTruthy(rv) {
+			return FALSE
+		}
+	}
+	return TRUE
+}
+
+func bi_array_concat_new(ctx *Context, a, b Value) Value {
+	left := a.(*Array)
+	right := b.(*Array)
+	l_sz := len(left.values)
+	r_sz := len(right.values)
+	values := make([]Value, l_sz+r_sz)
+	copy(values, left.values)
+	copy(values[l_sz:], right.values)
+	return newArray(values)
+}
+
+// =======
+// Globals
+// =======
+
+type Globals struct {
+	Object   *Object
+	Function *Object
+	Error    *Object
+	Number   *Object
+	String   *Object
+	Array    *Object
+	Hash     *Object
+	Boolean  *Object
+}
+
+func newGlobals() *Globals {
+	g := &Globals{}
+	g.Object = newObject(nil)
+	g.Object.slots["proto"] = newBuiltin("proto", bi_Object_proto)
+	g.Object.slots["clone"] = newBuiltin("clone", bi_Object_clone)
+	g.Object.slots["is_a"]  = newBuiltin("is_a", bi_Object_is_a)
+	g.Object.slots["=="]  = newBuiltin("==", bi_Object_eq)
+	g.Object.slots["!="]  = newBuiltin("!=", bi_Object_neq)
+	g.Function = newObject(g.Object)
+	g.Function.slots["bind"] = newBuiltin("bind", bi_Function_bind)
+	g.Error = newObject(g.Object)
+	g.Error.slots["throw"] = newBuiltin("throw", bi_Error_throw)
+
+	g.Number = newObject(g.Object)
+	g.Number.slots["+"] = binOp2Builtin("+", bi_Number_plus, VT_NUMBER, VT_NUMBER)
+	g.Number.slots["-"] = binOp2Builtin("-", bi_Number_minus, VT_NUMBER, VT_NUMBER)
+	g.Number.slots["*"] = binOp2Builtin("*", bi_Number_times, VT_NUMBER, VT_NUMBER)
+	g.Number.slots["/"] = binOp2Builtin("/", bi_Number_divide, VT_NUMBER, VT_NUMBER)
+	g.Number.slots[">"] = binOp2Builtin(">", bi_Number_gt, VT_NUMBER, VT_NUMBER)
+	g.Number.slots[">="] = binOp2Builtin(">=", bi_Number_geq, VT_NUMBER, VT_NUMBER)
+	g.Number.slots["<"] = binOp2Builtin("<", bi_Number_lt, VT_NUMBER, VT_NUMBER)
+	g.Number.slots["<="] = binOp2Builtin("<=", bi_Number_leq, VT_NUMBER, VT_NUMBER)
+
+	g.String = newObject(g.Object)
+	g.String.slots["+"] = binOp2Builtin("+", bi_String_plus, VT_STRING, VT_STRING)
+	g.String.slots[">"] = binOp2Builtin(">", bi_String_gt, VT_STRING, VT_STRING)
+	g.String.slots[">="] = binOp2Builtin(">=", bi_String_geq, VT_STRING, VT_STRING)
+	g.String.slots["<"] = binOp2Builtin("<", bi_String_lt, VT_STRING, VT_STRING)
+	g.String.slots["<="] = binOp2Builtin("<=", bi_String_leq, VT_STRING, VT_STRING)
+
+	g.Array = newObject(g.Object)
+	g.Array.slots["=="] = binOp2Builtin("==", bi_array_equal, VT_ARRAY, VT_ARRAY)
+	g.Array.slots["+"] = binOp2Builtin("+", bi_array_concat_new, VT_ARRAY, VT_ARRAY)
+
+	g.Hash = newObject(g.Object)
+	g.Hash.slots["=="] = binOp2Builtin("==", bi_hash_equal, VT_HASH, VT_HASH)
+
+	g.Boolean = newObject(g.Object)
+	return g
+}
+
+func (g *Globals) addToEnv(env *environment) {
+	env.set("Object", g.Object)
+	env.set("Function", g.Function)
+	env.set("Error", g.Error)
+	env.set("Array", g.Array)
+	env.set("Hash", g.Hash)
+}
+
+func (g *Globals) addToResolver(r *resolver.Resolver) {
+	r.AddGlobals([]string{"Object", "Function", "Error"})
+}
+
+// ========
+// Utilties
+// ========
+
+func expectNArgs(args []Value, n int) Value {
+	if len(args) == n {
+		return nil
+	}
+	return newError(String(fmt.Sprintf("expected %d argument(s), got=%d", n, len(args))))
+}
+
+type binOpFunc func(*Context, Value, Value) Value
+
+func binOp2Builtin(name string, f binOpFunc, ltype, rtype ValueType) *Builtin {
+	return newBuiltin(name, func(ctx *Context, this Value, args []Value) Value {
+		if err := expectNArgs(args, 1); err != nil {
+			return err
+		}
+		left := ctx.getSpecial(this, ltype)
+		if left == nil {
+			return ctx.forward(this, name, args)
+		}
+		right := ctx.getSpecial(args[0], rtype)
+		if right == nil {
+			return ctx.forward(this, name, args)
+		}
+		return f(ctx, left, right)
+	})
 }

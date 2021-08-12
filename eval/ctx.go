@@ -6,27 +6,27 @@ import (
 	"toe/parser"
 )
 
-func init() {
-	initBinOpTable()
-}
-
 type Context struct {
 	// stack contains the current call stack. we consult the call-stack to tell
 	// us which function we're in, and augment that using an expression's token.
 	stack []callStackEntry
 	// the current environment we're executing.
 	env *environment
-	// if we're in a user-defined function, what is the current object we're
-	// bound to -- we need this to implement super.
+	// if we're in a user-defined function, the object in which the currently
+	// executing function is found -- needed to implement super.
+	whence Value
 	this Value
 	// for hash tables
 	ht_seed uint64
+	// object model
+	globals *Globals
 }
 
 func NewContext() *Context {
 	return &Context{
 		stack:   make([]callStackEntry, 0, 8),
 		ht_seed: getNewHashTableSeed(),
+		globals: newGlobals(),
 	}
 }
 
@@ -82,10 +82,6 @@ func (ctx *Context) EvalExpr(node parser.Expr) Value {
 		return ctx.evalMethod(node)
 	case *parser.Call:
 		return ctx.evalCall(node)
-	case *parser.GetIndex:
-		return ctx.evalGetIndex(node)
-	case *parser.SetIndex:
-		return ctx.evalSetIndex(node)
 	case *parser.Identifier:
 		return ctx.evalIdentifier(node)
 	case *parser.Literal:
@@ -119,6 +115,7 @@ func (ctx *Context) EvalExpr(node parser.Expr) Value {
 
 func (ctx *Context) evalModule(module *parser.Module) Value {
 	ctx.pushEnv()
+	ctx.globals.addToEnv(ctx.env)
 	ctx.pushFunc(&moduleCse{module.Filename})
 	for _, stmt := range module.Stmts {
 		rv := ctx.EvalStmt(stmt)
@@ -257,7 +254,7 @@ func (ctx *Context) evalBinary(node *parser.Binary) Value {
 	if isError(right) {
 		return right
 	}
-	rv := ctx.binary(node.Op.Type, left, right)
+	rv := ctx.binary(node.Op.Lexeme, left, right)
 	if isError(rv) {
 		return ctx.addErrorStack(rv.(*Error), node.Op)
 	}
@@ -307,7 +304,11 @@ func (ctx *Context) evalGet(node *parser.Get) Value {
 	if isError(object) {
 		return object
 	}
-	rv := ctx.getSlot(object, node.Name.Lexeme)
+	if isSuper(object) {
+		object = object.(Super).proto
+	}
+	var tmp Value
+	rv := ctx.getSlot(object, node.Name.Lexeme, &tmp)
 	if isError(rv) {
 		return ctx.addErrorStack(rv.(*Error), node.Name)
 	}
@@ -323,6 +324,9 @@ func (ctx *Context) evalSet(node *parser.Set) Value {
 	if isError(object) {
 		return object
 	}
+	if isSuper(object) {
+		object = object.(Super).proto
+	}
 	rv := ctx.setSlot(object, node.Name.Lexeme, right)
 	if isError(rv) {
 		return ctx.addErrorStack(rv.(*Error), node.Name)
@@ -335,9 +339,15 @@ func (ctx *Context) evalMethod(node *parser.Method) Value {
 	if isError(object) {
 		return object
 	}
-	meth := ctx.getSlot(object, node.Name.Lexeme)
-	if isError(meth) {
-		return ctx.addErrorStack(meth.(*Error), node.Name)
+	this := object
+	var whence Value
+	if isSuper(object) {
+		object = object.(Super).proto
+		this = ctx.this
+	}
+	fn := ctx.getSlot(object, node.Name.Lexeme, &whence)
+	if isError(fn) {
+		return ctx.addErrorStack(fn.(*Error), node.Name)
 	}
 	args := make([]Value, len(node.Args))
 	for i, expr_node := range node.Args {
@@ -347,9 +357,9 @@ func (ctx *Context) evalMethod(node *parser.Method) Value {
 		}
 		args[i] = expr
 	}
-	rv := ctx.call(meth, object, args)
+	rv := ctx.call(whence, fn, this, args)
 	if isError(rv) {
-		return ctx.addErrorStack(rv.(*Error), node.LParen)
+		ctx.addErrorStack(rv.(*Error), node.LParen)
 	}
 	return rv
 }
@@ -367,45 +377,9 @@ func (ctx *Context) evalCall(node *parser.Call) Value {
 		}
 		args[i] = expr
 	}
-	rv := ctx.call(callee, NIL, args)
+	rv := ctx.call(nil, callee, NIL, args)
 	if isError(rv) {
 		return ctx.addErrorStack(rv.(*Error), node.LParen)
-	}
-	return rv
-}
-
-func (ctx *Context) evalGetIndex(node *parser.GetIndex) Value {
-	object := ctx.EvalExpr(node.Object)
-	if isError(object) {
-		return object
-	}
-	index := ctx.EvalExpr(node.Index)
-	if isError(index) {
-		return index
-	}
-	rv := ctx.binary(node.LBracket.Type, object, index)
-	if isError(rv) {
-		return ctx.addErrorStack(rv.(*Error), node.LBracket)
-	}
-	return rv
-}
-
-func (ctx *Context) evalSetIndex(node *parser.SetIndex) Value {
-	right := ctx.EvalExpr(node.Right)
-	if isError(right) {
-		return right
-	}
-	object := ctx.EvalExpr(node.Object)
-	if isError(object) {
-		return object
-	}
-	index := ctx.EvalExpr(node.Index)
-	if isError(index) {
-		return index
-	}
-	rv := ctx.setIndex(object, index, right)
-	if isError(rv) {
-		return ctx.addErrorStack(rv.(*Error), node.LBracket)
 	}
 	return rv
 }
@@ -458,16 +432,13 @@ func (ctx *Context) evalFunction(node *parser.Function) Value {
 }
 
 func (ctx *Context) evalSuper(node *parser.Super) Value {
-	proto := ctx.getPrototype(ctx.this)
+	proto := ctx.getPrototype(ctx.whence)
+	// fmt.Printf("ctx.whence=%#+v, ctx.whence.proto=%p\n", ctx.whence, proto)
 	if proto == nil {
 		e := newError(String("object has nil prototype"))
 		return ctx.addErrorStack(e, node.Tok)
 	}
-	value := ctx.getSlot(proto, node.Name.Lexeme)
-	if isError(value) {
-		return ctx.addErrorStack(value.(*Error), node.Name)
-	}
-	return value
+	return Super{proto}
 }
 
 // =========
@@ -485,6 +456,7 @@ func (ctx *Context) addErrorStack(err *Error, token lexer.Token) *Error {
 	return err
 }
 
+func isSuper(s Value) bool    { return s.Type() == VT_SUPER }
 func isError(s Value) bool    { return s.Type() == VT_ERROR }
 func isBreak(s Value) bool    { return s.Type() == VT_BREAK }
 func isContinue(s Value) bool { return s.Type() == VT_CONTINUE }

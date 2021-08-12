@@ -97,6 +97,40 @@ func bi_Object_neq(ctx *Context, this Value, args []Value) Value {
 	return Boolean(!isTruthy(rv))
 }
 
+func bi_Object_set_slot(ctx *Context, this Value, args []Value) Value {
+	if err := expectNArgs(args, 2); err != nil {
+		return err
+	}
+	slot := ctx.getSpecial(args[0], VT_STRING)
+	if slot == nil {
+		return newError(String("slot has no VT_STRING in prototype chain"))
+	}
+	return ctx.setSlot(this, string(slot.(String)), args[1])
+}
+
+func bi_Object_get_slot(ctx *Context, this Value, args []Value) Value {
+	if err := expectNArgs(args, 1); err != nil {
+		return err
+	}
+	slot := ctx.getSpecial(args[0], VT_STRING)
+	if slot == nil {
+		return newError(String("slot has no VT_STRING in prototype chain"))
+	}
+	var whence Value
+	return ctx.getSlot(this, string(slot.(String)), &whence)
+}
+
+func bi_Object_call_slot(ctx *Context, this Value, args []Value) Value {
+	if len(args) == 0 {
+		return newError(String("expected at least 1 argument(s), got=0"))
+	}
+	slot := ctx.getSpecial(args[0], VT_STRING)
+	if slot == nil {
+		return newError(String("slot has no VT_STRING in prototype chain"))
+	}
+	return ctx.call_method(this, string(slot.(String)), args[1:])
+}
+
 // --------
 // Function
 // --------
@@ -212,6 +246,26 @@ func bi_array_concat(ctx *Context, this Value, args []Value) Value {
 	return NIL
 }
 
+func bi_array_get(ctx *Context, this Value, args []Value) Value {
+	arr := ctx.getSpecial(this, VT_ARRAY)
+	if arr == nil {
+		return newError(String("no VT_ARRAY in prototype chain"))
+	}
+	if err := expectNArgs(args, 1); err != nil {
+		return err
+	}
+	num := ctx.getSpecial(args[0], VT_NUMBER)
+	if num == nil {
+		return newError(String("index: no VT_NUMBER in prototype chain"))
+	}
+	me := arr.(*Array)
+	idx := int(num.(Number))
+	if 0 <= idx && idx < len(me.values) {
+		return me.values[idx]
+	}
+	return newError(String("list index out of bounds"))
+}
+
 // ----
 // Hash
 // ----
@@ -269,6 +323,9 @@ func newGlobals() *Globals {
 	g.Object.slots["is_a"] = newBuiltin("is_a", bi_Object_is_a)
 	g.Object.slots["=="] = newBuiltin("==", bi_Object_eq)
 	g.Object.slots["!="] = newBuiltin("!=", bi_Object_neq)
+	g.Object.slots["get_slot"] = newBuiltin("get_slot", bi_Object_get_slot)
+	g.Object.slots["set_slot"] = newBuiltin("set_slot", bi_Object_set_slot)
+	g.Object.slots["call_slot"] = newBuiltin("call_slot", bi_Object_call_slot)
 
 	g.Function = newObject(g.Object)
 	g.Function.slots["bind"] = newBuiltin("bind", bi_Function_bind)
@@ -299,6 +356,7 @@ func newGlobals() *Globals {
 	g.Array.slots["=="] = binOp2Builtin("==", bi_array_equal, VT_ARRAY, VT_ARRAY)
 	g.Array.slots["+"] = binOp2Builtin("+", bi_array_concat_new, VT_ARRAY, VT_ARRAY)
 	g.Array.slots["concat"] = newBuiltin("concat", bi_array_concat)
+	g.Array.slots["get"] = newBuiltin("get", bi_array_get)
 
 	g.Hash = newObject(g.Object)
 	g.Hash.slots["=="] = binOp2Builtin("==", bi_hash_equal, VT_HASH, VT_HASH)

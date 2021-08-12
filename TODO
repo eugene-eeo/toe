@@ -1,5 +1,5 @@
 [x] Arrays and Hash maps.
-[ ] Index operation.
+[x] Index operation.
 [ ] Iteration protocol for objects.
 [ ] Resolver tests.
 [ ] Evaluator tests.

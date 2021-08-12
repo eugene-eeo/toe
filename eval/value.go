@@ -3,7 +3,6 @@ package eval
 import (
 	"bytes"
 	"fmt"
-	"strconv"
 	"toe/parser"
 )
 
@@ -121,90 +120,6 @@ func (v *Function) Type() ValueType { return VT_FUNCTION }
 func (v *Array) Type() ValueType    { return VT_ARRAY }
 func (v *Hash) Type() ValueType     { return VT_HASH }
 func (v *Builtin) Type() ValueType  { return VT_BUILTIN }
-
-func (v Nil) String() string { return "nil" }
-func (v Boolean) String() string {
-	if v {
-		return "true"
-	}
-	return "false"
-}
-func (v Number) String() string { return strconv.FormatFloat(float64(v), 'g', -1, 64) }
-func (v String) String() string { return string(v) }
-
-func (v *Function) String() string {
-	name := v.node.Name
-	if name != "" {
-		name = " " + name
-	}
-	isBound := ""
-	if v.this != nil {
-		isBound = " bound"
-	}
-	return fmt.Sprintf("[Function%s%s]", isBound, name)
-}
-
-func (v *Object) String() string {
-	return fmt.Sprintf("[Object %p]", v)
-}
-
-func (v *Array) String() string {
-	var buf bytes.Buffer
-	last_idx := len(v.values) - 1
-	buf.WriteString("[")
-	for i, x := range v.values {
-		buf.WriteString(inspect(x))
-		if i != last_idx {
-			buf.WriteString(", ")
-		}
-	}
-	buf.WriteString("]")
-	return buf.String()
-}
-
-func (v *Hash) String() string {
-	var buf bytes.Buffer
-	buf.WriteString("{")
-	j := uint64(0)
-	size := v.table.size()
-	for i := 0; i < len(v.table.entries); i++ {
-		ref := &v.table.entries[i]
-		if ref.hasValue() {
-			j++
-			buf.WriteString(inspect(*ref.key))
-			buf.WriteString(": ")
-			buf.WriteString(inspect(*ref.value))
-			if j < size {
-				buf.WriteString(", ")
-			}
-		}
-	}
-	buf.WriteString("}")
-	return buf.String()
-}
-
-func (v *Builtin) String() string {
-	isBound := ""
-	if v.this != nil {
-		isBound = " bound"
-	}
-	return fmt.Sprintf("[Function%s %s]", isBound, v.name)
-}
-
-func (v String) Inspect() string { return fmt.Sprintf("%q", string(v)) }
-
-type Inspect interface{ Inspect() string }
-type Stringer interface{ String() string }
-
-func inspect(v Value) string {
-	switch v := v.(type) {
-	case Inspect:
-		return v.Inspect()
-	case Stringer:
-		return v.String()
-	}
-	panic(fmt.Sprintf("cannot inspect %#v", v))
-}
 
 // ==========
 // Singletons

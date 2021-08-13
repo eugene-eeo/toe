@@ -169,6 +169,21 @@ func bi_Function_bind(ctx *Context, this Value, args []Value) Value {
 	return newError(String(fmt.Sprintf("invalid receiver type %s", this.Type())))
 }
 
+func bi_Function_call(ctx *Context, this Value, args []Value) Value {
+	var call_this Value = NIL
+	if len(args) > 1 {
+		call_this = args[0]
+		args = args[1:]
+	}
+	switch this := this.(type) {
+	case *Function:
+		return this.Call(ctx, call_this, args)
+	case *Builtin:
+		return this.Call(ctx, call_this, args)
+	}
+	return newError(String(fmt.Sprintf("invalid receiver type %s", this.Type())))
+}
+
 // -----
 // Error
 // -----
@@ -310,10 +325,18 @@ func bi_Array_concat(ctx *Context, this Value, args []Value) Value {
 	return NIL
 }
 
+func bi_Array_size(ctx *Context, this Value, args []Value) Value {
+	arr, err := expectArgType(ctx, "this", this, VT_ARRAY)
+	if err != nil {
+		return err
+	}
+	return Number(len(arr.(*Array).values))
+}
+
 func bi_Array_get(ctx *Context, this Value, args []Value) Value {
-	arr := ctx.getSpecial(this, VT_ARRAY)
-	if arr == nil {
-		return newError(String("no VT_ARRAY in prototype chain"))
+	arr, err := expectArgType(ctx, "this", this, VT_ARRAY)
+	if err != nil {
+		return err
 	}
 	if err := expectNArgs(args, 1); err != nil {
 		return err
@@ -331,7 +354,7 @@ func bi_Array_get(ctx *Context, this Value, args []Value) Value {
 }
 
 func bi_Array_set(ctx *Context, this Value, args []Value) Value {
-	arr, err := expectArgType(ctx, "this", this, VT_HASH)
+	arr, err := expectArgType(ctx, "this", this, VT_ARRAY)
 	if err != nil {
 		return err
 	}
@@ -352,7 +375,7 @@ func bi_Array_set(ctx *Context, this Value, args []Value) Value {
 }
 
 func bi_Array_push(ctx *Context, this Value, args []Value) Value {
-	arr, err := expectArgType(ctx, "this", this, VT_HASH)
+	arr, err := expectArgType(ctx, "this", this, VT_ARRAY)
 	if err != nil {
 		return err
 	}
@@ -364,7 +387,7 @@ func bi_Array_push(ctx *Context, this Value, args []Value) Value {
 }
 
 func bi_Array_pop(ctx *Context, this Value, args []Value) Value {
-	arr, err := expectArgType(ctx, "this", this, VT_HASH)
+	arr, err := expectArgType(ctx, "this", this, VT_ARRAY)
 	if err != nil {
 		return err
 	}
@@ -384,8 +407,9 @@ func bi_Array_pop(ctx *Context, this Value, args []Value) Value {
 			return newError(String("list index out of bounds"))
 		}
 	}
+	rv := me.values[idx]
 	me.values = append(me.values[idx:], me.values[idx+1:]...)
-	return NIL
+	return rv
 }
 
 // ----
@@ -432,6 +456,14 @@ func bi_Hash_set(ctx *Context, this Value, args []Value) Value {
 		return err
 	}
 	return NIL
+}
+
+func bi_Hash_size(ctx *Context, this Value, args []Value) Value {
+	hash, err := expectArgType(ctx, "this", this, VT_HASH)
+	if err != nil {
+		return err
+	}
+	return Number(hash.(*Hash).table.size())
 }
 
 func bi_Hash_equal(ctx *Context, a, b Value) Value {
@@ -504,6 +536,7 @@ func newGlobals() *Globals {
 	g.Function = newObject(g.Object)
 	g.Function.slots["type"] = String("Function")
 	g.Function.slots["bind"] = newBuiltin("bind", bi_Function_bind)
+	g.Function.slots["call"] = newBuiltin("call", bi_Function_call)
 
 	g.Error = newObject(g.Object)
 	g.Error.slots["type"] = String("Error")
@@ -540,13 +573,16 @@ func newGlobals() *Globals {
 	g.Array.slots["=="] = binOp2Builtin("==", bi_Array_equal, VT_ARRAY, VT_ARRAY)
 	g.Array.slots["+"] = binOp2Builtin("+", bi_Array_plus, VT_ARRAY, VT_ARRAY)
 	g.Array.slots["concat"] = newBuiltin("concat", bi_Array_concat)
+	g.Array.slots["size"] = newBuiltin("size", bi_Array_size)
 	g.Array.slots["get"] = newBuiltin("get", bi_Array_get)
 	g.Array.slots["set"] = newBuiltin("set", bi_Array_set)
+	g.Array.slots["push"] = newBuiltin("push", bi_Array_push)
 	g.Array.slots["pop"] = newBuiltin("pop", bi_Array_pop)
 
 	g.Hash = newObject(g.Object)
 	g.Hash.slots["type"] = String("Hash")
 	g.Hash.slots["init"] = newBuiltin("init", bi_Hash_init)
+	g.Hash.slots["size"] = newBuiltin("size", bi_Hash_size)
 	g.Hash.slots["get"] = newBuiltin("get", bi_Hash_get)
 	g.Hash.slots["set"] = newBuiltin("set", bi_Hash_set)
 	g.Hash.slots["=="] = binOp2Builtin("==", bi_Hash_equal, VT_HASH, VT_HASH)

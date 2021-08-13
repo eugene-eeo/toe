@@ -14,8 +14,7 @@ type Context struct {
 	env *environment
 	// the object in which the currently executing function is found,
 	// and the current `this` -- these are required to implement super.
-	whence Value
-	this Value
+	whence, this Value
 	// for hash tables
 	ht_seed uint64
 	// object model
@@ -403,11 +402,12 @@ func (ctx *Context) evalArray(node *parser.Array) Value {
 		}
 		values[i] = val
 	}
-	return newArray(values)
+	return newArray(ctx, values)
 }
 
 func (ctx *Context) evalHash(node *parser.Hash) Value {
-	hash := newHash(ctx)
+	obj := newHash(ctx)
+	hash := obj.data.(*Hash)
 	for _, pair := range node.Pairs {
 		k := ctx.EvalExpr(pair.Key)
 		if isError(k) {
@@ -423,7 +423,7 @@ func (ctx *Context) evalHash(node *parser.Hash) Value {
 			return err
 		}
 	}
-	return hash
+	return obj
 }
 
 func (ctx *Context) evalFunction(node *parser.Function) Value {
@@ -433,7 +433,6 @@ func (ctx *Context) evalFunction(node *parser.Function) Value {
 
 func (ctx *Context) evalSuper(node *parser.Super) Value {
 	proto := ctx.getPrototype(ctx.whence)
-	// fmt.Printf("ctx.whence=%#+v, ctx.whence.proto=%p\n", ctx.whence, proto)
 	if proto == nil {
 		e := newError(String("object has nil prototype"))
 		return ctx.addErrorStack(e, node.Tok)

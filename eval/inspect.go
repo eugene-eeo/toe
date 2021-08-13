@@ -17,22 +17,23 @@ type inspectable interface {
 }
 
 func inspect(v Value) string {
-	seen := map[inspectable]bool{}
-	var visit valueInspector
-	visit = func(v Value) string {
-		switch v := v.(type) {
-		case inspectable:
-			if seen[v] {
-				return "(...)"
-			}
-			seen[v] = true
-			return v.inspect(visit)
-		case Stringer:
-			return v.String()
-		}
-		panic(fmt.Sprintf("cannot inspect: %#+v", v))
-	}
-	return visit(v)
+	return fmt.Sprintf("%#+v", v)
+	// seen := map[inspectable]bool{}
+	// var visit valueInspector
+	// visit = func(v Value) string {
+	// 	switch v := v.(type) {
+	// 	case inspectable:
+	// 		if seen[v] {
+	// 			return "(...)"
+	// 		}
+	// 		seen[v] = true
+	// 		return v.inspect(visit)
+	// 	case Stringer:
+	// 		return v.String()
+	// 	}
+	// 	panic(fmt.Sprintf("cannot inspect: %#+v", v))
+	// }
+	// return visit(v)
 }
 
 // Container types (or String -- which needs special formatting).

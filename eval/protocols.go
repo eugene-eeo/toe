@@ -150,8 +150,15 @@ func (ctx *Context) getPrototype(obj Value) Value {
 // value is nil, then the search is unsuccessful.
 func (ctx *Context) getSpecial(obj Value, typ ValueType) Value {
 	for obj != nil {
-		if obj.Type() == typ {
+		objTyp := obj.Type()
+		if objTyp == typ {
 			return obj
+		}
+		if objTyp == VT_OBJECT {
+			data := obj.(*Object).data
+			if data != nil && data.Type() == typ {
+				return data
+			}
 		}
 		obj = ctx.getPrototype(obj)
 	}
@@ -168,7 +175,9 @@ func (ctx *Context) maybeGetSlot(obj Value, name string, whence *Value) Value {
 	for obj != nil {
 		if obj_slots, ok := obj.(hasSlots); ok {
 			if v, ok := obj_slots.getSlots()[name]; ok {
-				*whence = obj
+				if whence != nil {
+					*whence = obj
+				}
 				return v
 			}
 		}
@@ -324,7 +333,6 @@ func (ctx *Context) call_method(obj Value, name string, args []Value) Value {
 
 // forward forwards the call `name` up the prototype chain.
 func (ctx *Context) forward(obj Value, name string, args []Value) Value {
-	fmt.Printf("fwd %#v\n", obj)
 	var whence Value
 	fn := ctx.getSlot(ctx.getPrototype(ctx.whence), name, &whence)
 	if isError(fn) {

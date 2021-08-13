@@ -52,6 +52,7 @@ type String string
 type Object struct {
 	proto Value
 	slots map[string]Value
+	data  Value // special value pointing to a builtin type.
 }
 
 func newSlots() map[string]Value {
@@ -83,27 +84,23 @@ func newFunction(filename string, node *parser.Function, env *environment) *Func
 }
 
 type Array struct {
-	slots  map[string]Value
 	values []Value
 }
 
-func newArray(values []Value) *Array {
-	return &Array{
-		slots:  newSlots(),
-		values: values,
-	}
+func newArray(ctx *Context, values []Value) *Object {
+	obj := newObject(ctx.globals.Array)
+	obj.data = &Array{values}
+	return obj
 }
 
 type Hash struct {
-	slots map[string]Value
 	table *hashTable
 }
 
-func newHash(ctx *Context) *Hash {
-	return &Hash{
-		slots: newSlots(),
-		table: newHashTable(ctx),
-	}
+func newHash(ctx *Context) *Object {
+	obj := newObject(ctx.globals.Hash)
+	obj.data = &Hash{table: newHashTable(ctx)}
+	return obj
 }
 
 type builtinFunc func(ctx *Context, this Value, args []Value) Value

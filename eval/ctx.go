@@ -154,7 +154,7 @@ func (ctx *Context) evalFor(node *parser.For) Value {
 	}
 	iterator, ok := getIterator(iter_obj)
 	if !ok {
-		e := newError(String("not an iterable"))
+		e := newError(ctx, String("not an iterable"))
 		return ctx.addErrorStack(e, node.Keyword)
 	}
 	loop_var := node.Name.Lexeme
@@ -387,7 +387,7 @@ func (ctx *Context) evalIdentifier(node *parser.Identifier) Value {
 	name := node.Id.Lexeme
 	value, ok := ctx.env.ancestor(node.Loc).get(name)
 	if !ok {
-		e := newError(String(fmt.Sprintf("%q is not defined", name)))
+		e := newError(ctx, String(fmt.Sprintf("%q is not defined", name)))
 		return ctx.addErrorStack(e, node.Id)
 	}
 	return value
@@ -419,7 +419,7 @@ func (ctx *Context) evalHash(node *parser.Hash) Value {
 		}
 		err := hash.table.insert(k, v)
 		if err != nil {
-			ctx.addErrorStack(err.(*Error), node.LBrace)
+			ctx.addErrorStack(err, node.LBrace)
 			return err
 		}
 	}
@@ -434,7 +434,7 @@ func (ctx *Context) evalFunction(node *parser.Function) Value {
 func (ctx *Context) evalSuper(node *parser.Super) Value {
 	proto := ctx.getPrototype(ctx.whence)
 	if proto == nil {
-		e := newError(String("object has nil prototype"))
+		e := newError(ctx, String("object has nil prototype"))
 		return ctx.addErrorStack(e, node.Tok)
 	}
 	return Super{proto}
@@ -450,6 +450,16 @@ func (ctx *Context) addErrorStack(err *Error, token lexer.Token) *Error {
 		fn:  cse.Filename(),
 		ln:  token.Line,
 		col: token.Column,
+		ctx: cse.Context(),
+	})
+	return err
+}
+
+func (ctx *Context) addErrorStackBuiltin(err *Error) *Error {
+	cse := ctx.stack[len(ctx.stack)-1]
+	err.stack = append(err.stack, context{
+		fn:  cse.Filename(),
+		ln:  0, col: 0,
 		ctx: cse.Context(),
 	})
 	return err

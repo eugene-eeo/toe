@@ -7,117 +7,105 @@ import (
 )
 
 // This file implements the inspect() protocol.
-// Most of the complication comes from ensuring that recursive objects,
-// e.g. a list containing itself does not crash the process.
+//
+// inspect() calls inspect_visit(f) with a function used to call the
+// next inspected object.
 
-type valueInspector func(v Value) string
+var bi_Object_inspect = make_method(
+	make_argspec(VT_ANY),
+	func(ctx *Context, this Value, args []Value) Value {
+		outer_this := this
+		m := map[Value]bool{}
+		var visitor *Builtin
+		visitor = newBuiltin("visitor", make_method(
+			make_argspec(VT_ANY, make_argpair("value", VT_ANY)),
+			func (ctx *Context, _ Value, args []Value) Value {
+				v := args[0]
+				if m[v] {
+					return String("...")
+				} else {
+					m[v] = true
+					// Check if we have an inspect_visit method; if so then we have
+					// to call it; otherwise just call the normal inspect().
+					var rv Value
+					if ctx.maybeGetSlot(v, "inspect_visit", nil) != nil {
+						rv = ctx.call_method(v, "inspect_visit", []Value{visitor})
+					} else if v != outer_this {
+						rv = ctx.call_method(v, "inspect", nil)
+					} else {
+						rv = String(fmt.Sprintf("[Object %p]", v))
+					}
+					if isError(rv) {
+						ctx.addErrorStackBuiltin(rv.(*Error))
+						return rv
+					}
+					str := ctx.getSpecial(rv, VT_STRING)
+					if str == nil {
+						err := newError(ctx, String("inspect should return a string"))
+						return ctx.addErrorStackBuiltin(err)
+					}
+					return str
+				}
+			},
+		))
+		return ctx.call(NIL, visitor, NIL, []Value{outer_this})
+	},
+)
 
-type inspectable interface {
-	inspect(valueInspector) string
-}
+var bi_Function_inspect = make_method(
+	make_argspec(VT_FUNCTION),
+	func(ctx *Context, this Value, args []Value) Value {
+		return String(fmt.Sprintf("[Function %p]", this))
+	},
+)
 
-func inspect(v Value) string {
-	return fmt.Sprintf("%#+v", v)
-	// seen := map[inspectable]bool{}
-	// var visit valueInspector
-	// visit = func(v Value) string {
-	// 	switch v := v.(type) {
-	// 	case inspectable:
-	// 		if seen[v] {
-	// 			return "(...)"
-	// 		}
-	// 		seen[v] = true
-	// 		return v.inspect(visit)
-	// 	case Stringer:
-	// 		return v.String()
-	// 	}
-	// 	panic(fmt.Sprintf("cannot inspect: %#+v", v))
-	// }
-	// return visit(v)
-}
-
-// Container types (or String -- which needs special formatting).
-
-func (v String) inspect(f valueInspector) string {
-	return fmt.Sprintf("%q", string(v))
-}
-
-func (v *Array) inspect(f valueInspector) string {
-	var buf bytes.Buffer
-	last_idx := len(v.values) - 1
-	buf.WriteString("[")
-	for i, x := range v.values {
-		buf.WriteString(f(x))
-		if i != last_idx {
-			buf.WriteString(", ")
+var bi_Boolean_inspect = make_method(
+	make_argspec(VT_BOOLEAN),
+	func(ctx *Context, this Value, args []Value) Value {
+		if this == TRUE {
+			return String("true")
 		}
-	}
-	buf.WriteString("]")
-	return buf.String()
-}
+		return String("false")
+	},
+)
 
-func (v *Hash) inspect(f valueInspector) string {
-	var buf bytes.Buffer
-	buf.WriteString("{")
-	j := uint64(0)
-	size := v.table.size()
-	for i := 0; i < len(v.table.entries); i++ {
-		ref := &v.table.entries[i]
-		if ref.hasValue() {
-			j++
-			buf.WriteString(f(*ref.key))
-			buf.WriteString(": ")
-			buf.WriteString(f(*ref.value))
-			if j < size {
+var bi_String_inspect = make_method(
+	make_argspec(VT_STRING),
+	func(ctx *Context, this Value, args []Value) Value {
+		return String(fmt.Sprintf("%q", string(this.(String))))
+	},
+)
+
+var bi_Number_inspect = make_method(
+	make_argspec(VT_NUMBER),
+	func(ctx *Context, this Value, args []Value) Value {
+		return String(strconv.FormatFloat(
+			float64(this.(Number)),
+			'g', -1, 64,
+		))
+	},
+)
+
+var bi_Array_inspect_visit = make_method(
+	make_argspec(VT_ARRAY, make_argpair("f", VT_CALL)),
+	func(ctx *Context, this Value, args []Value) Value {
+		f := args[0].(*Builtin)
+		var buf bytes.Buffer
+		buf.WriteString("[")
+		arr := this.(*Array)
+		sz := len(arr.values)
+		for i, x := range arr.values {
+			s := ctx.call(NIL, f, NIL, []Value{x})
+			if isError(s) {
+				ctx.addErrorStackBuiltin(s.(*Error))
+				return s
+			}
+			buf.WriteString(string(s.(String)))
+			if i != sz - 1 {
 				buf.WriteString(", ")
 			}
 		}
-	}
-	buf.WriteString("}")
-	return buf.String()
-}
-
-// =========
-// Stringify
-// =========
-
-type Stringer interface {
-	String() string
-}
-
-func (v Nil) String() string { return "nil" }
-func (v Boolean) String() string {
-	if v {
-		return "true"
-	}
-	return "false"
-}
-func (v Number) String() string { return strconv.FormatFloat(float64(v), 'g', -1, 64) }
-func (v String) String() string { return string(v) }
-
-func (v *Function) String() string {
-	name := v.node.Name
-	if name != "" {
-		name = " " + name
-	}
-	isBound := ""
-	if v.this != nil {
-		isBound = " bound"
-	}
-	return fmt.Sprintf("[Function%s%s %p]", isBound, name, v)
-}
-
-func (v *Object) String() string {
-	return fmt.Sprintf("[Object %p]", v)
-}
-
-func (v *Builtin) String() string {
-	isBound := ""
-	if v.this != nil {
-		isBound = " bound"
-	}
-	return fmt.Sprintf("[Function%s %s]", isBound, v.name)
-}
-
-func (v *Array) String() string { return inspect(v) }
-func (v *Hash)  String() string { return inspect(v) }
+		buf.WriteString("]")
+		return String(buf.String())
+	},
+)

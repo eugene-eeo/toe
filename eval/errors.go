@@ -17,11 +17,18 @@ type functionCse struct {
 }
 
 func (f functionCse) Filename() string { return f.function.filename }
-func (f functionCse) Context() string  { return f.function.String() }
+func (f functionCse) Context() string  {
+	str := f.function.node.Name
+	if str == "" {
+		return "<anonymous>"
+	} else {
+		return str
+	}
+}
 
 type builtinCse struct {
 	builtin *Builtin
 }
 
 func (b builtinCse) Filename() string { return "[builtin]" }
-func (b builtinCse) Context() string  { return b.builtin.String() }
+func (b builtinCse) Context() string  { return b.builtin.name }

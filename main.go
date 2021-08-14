@@ -59,7 +59,13 @@ func main() {
 			} else if u.Type() == eval.VT_ERROR {
 				fmt.Fprintln(os.Stderr, u.(*eval.Error).String())
 			} else {
-				fmt.Println(ctx.Inspect(u))
+				v, err := ctx.Inspect(u)
+				if err == nil {
+					fmt.Println(v)
+				} else {
+					fmt.Fprintln(os.Stderr, "inspect error:")
+					fmt.Fprintln(os.Stderr, err.String())
+				}
 			}
 		}
 	}

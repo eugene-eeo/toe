@@ -24,8 +24,16 @@ func NewInteractiveContext() *InteractiveContext {
 	return &InteractiveContext{fn, ctx, res}
 }
 
-func (ic *InteractiveContext) Inspect(v Value) string {
-	return inspect(v)
+func (ic *InteractiveContext) Inspect(v Value) (string, *Error) {
+	rv := ic.ctx.call_method(v, "inspect", nil)
+	if isError(rv) {
+		return "", rv.(*Error)
+	}
+	str := ic.ctx.getSpecial(rv, VT_STRING)
+	if str == nil {
+		return "", newError(ic.ctx, String("inspect returned a non-string"))
+	}
+	return string(rv.(String)), nil
 }
 
 func (ic *InteractiveContext) Run(input string) (Value, []error) {

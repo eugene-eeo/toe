@@ -193,7 +193,7 @@ func (ctx *Context) maybeGetSlot(obj Value, name string, whence *Value) Value {
 func (ctx *Context) getSlot(obj Value, name string, whence *Value) Value {
 	rv := ctx.maybeGetSlot(obj, name, whence)
 	if rv == nil {
-		err := newError(String(fmt.Sprintf("object has no slot %q", name)))
+		err := newError(ctx, String(fmt.Sprintf("object has no slot %q", name)))
 		return err
 	}
 	return rv
@@ -215,7 +215,7 @@ func (ctx *Context) setSlot(obj Value, name string, val Value) Value {
 		slots[name] = val
 		return val
 	}
-	err := newError(String(fmt.Sprintf("cannot set slot %q on object", name)))
+	err := newError(ctx, String(fmt.Sprintf("cannot set slot %q on object", name)))
 	return err
 }
 
@@ -232,7 +232,7 @@ func (ctx *Context) call(whence Value, callee Value, this Value, args []Value) (
 	case *Builtin:
 		rv = callee.Call(ctx, this, args)
 	default:
-		rv = newError(String("not a function"))
+		rv = newError(ctx, String("not a function"))
 	}
 	ctx.whence = old_whence
 	return
@@ -310,7 +310,7 @@ func (ctx *Context) unary(op lexer.TokenType, right Value) Value {
 	case op == lexer.MINUS && right.Type() == VT_NUMBER:
 		return Number(-right.(Number))
 	}
-	return newError(String(fmt.Sprintf(
+	return newError(ctx, String(fmt.Sprintf(
 		"unsupported operand for %q: %s",
 		op.String(),
 		right.Type().String(),

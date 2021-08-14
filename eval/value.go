@@ -30,6 +30,9 @@ const (
 	VT_ERROR
 	// Hashtable -- tombstones
 	VT_TOMBSTONE
+	// Argspec
+	VT_ANY  // any value will do
+	VT_CALL // callable values.
 )
 
 type Value interface {
@@ -161,12 +164,14 @@ type context struct {
 }
 
 type Error struct {
+	ctx    *Context
 	reason Value
 	stack  []context
 }
 
-func newError(reason Value) *Error {
+func newError(ctx *Context, reason Value) *Error {
 	return &Error{
+		ctx:    ctx,
 		reason: reason,
 		stack:  []context{},
 	}
@@ -174,8 +179,16 @@ func newError(reason Value) *Error {
 
 func (e *Error) String() string {
 	var buf bytes.Buffer
+	reason := e.ctx.call_method(e.reason, "inspect", nil)
+	if isError(reason) {
+		reason = String("<error inspect() failed>")
+	}
+	str := e.ctx.getSpecial(reason, VT_STRING)
+	if str == nil {
+		str = String("<error inspect() failed>")
+	}
 	buf.WriteString("Error: ")
-	buf.WriteString(e.reason.(Stringer).String())
+	buf.WriteString(string(str.(String)))
 	buf.WriteString("\n")
 	for i, ctx := range e.stack {
 		buf.WriteString(fmt.Sprintf("  at %s:%d:%d: %s", ctx.fn, ctx.ln, ctx.col, ctx.ctx))

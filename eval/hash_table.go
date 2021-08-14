@@ -129,13 +129,13 @@ func newHashTable(ctx *Context) *hashTable {
 
 // hash tries to hash the given object -- if its hash method
 // returned an error, then err will be an error object.
-func (ht *hashTable) hash(k Value) (h uint64, err Value) {
+func (ht *hashTable) hash(k Value) (h uint64, err *Error) {
 	rv := ht.ctx.getObjectHash(k)
 	if isError(rv) {
-		return 0, rv
+		return 0, rv.(*Error)
 	}
 	if rv.Type() != VT_NUMBER {
-		return 0, newError(String(fmt.Sprintf(
+		return 0, newError(ht.ctx, String(fmt.Sprintf(
 			"expected hash to return a number, got: %s",
 			rv.Type())))
 	}
@@ -196,7 +196,7 @@ func (ht *hashTable) resize(grow bool) {
 //
 //   - entry != nil && err == nil   (empty entry / a matching entry)
 //   - entry == nil && err != nil   (error)
-func (ht *hashTable) getEntry(k Value, forInsert bool) (entry *htEntry, hash uint64, err Value) {
+func (ht *hashTable) getEntry(k Value, forInsert bool) (entry *htEntry, hash uint64, err *Error) {
 	hash, err = ht.hash(k)
 	if err != nil {
 		return nil, hash, err
@@ -223,7 +223,7 @@ func (ht *hashTable) getEntry(k Value, forInsert bool) (entry *htEntry, hash uin
 			}
 			cmp_res := ht.ctx.areObjectsEqual(key, k)
 			if isError(cmp_res) {
-				return nil, hash, cmp_res
+				return nil, hash, cmp_res.(*Error)
 			}
 			if isTruthy(cmp_res) {
 				return ref, hash, nil
@@ -238,7 +238,7 @@ func (ht *hashTable) getEntry(k Value, forInsert bool) (entry *htEntry, hash uin
 }
 
 // get finds the value associated with the given key in the hash table, if any.
-func (ht *hashTable) get(k Value) (v Value, found bool, err Value) {
+func (ht *hashTable) get(k Value) (v Value, found bool, err *Error) {
 	entry, _, err := ht.getEntry(k, false)
 	if err != nil {
 		return nil, false, err
@@ -250,7 +250,7 @@ func (ht *hashTable) get(k Value) (v Value, found bool, err Value) {
 }
 
 // delete deletes the given key from the table, if it exists.
-func (ht *hashTable) delete(k Value) (found bool, err Value) {
+func (ht *hashTable) delete(k Value) (found bool, err *Error) {
 	entry, _, err := ht.getEntry(k, false)
 	if err != nil {
 		return false, err
@@ -267,7 +267,7 @@ func (ht *hashTable) delete(k Value) (found bool, err Value) {
 
 // insert inserts the given pair into the hash table.
 // on a successful insert, err == nil.
-func (ht *hashTable) insert(k Value, v Value) (err Value) {
+func (ht *hashTable) insert(k Value, v Value) (err *Error) {
 	entry, hash, err := ht.getEntry(k, true)
 	if err != nil {
 		return err
@@ -303,5 +303,5 @@ func (ctx *Context) getObjectHash(v Value) (hash Value) {
 	if hashable, ok := v.(interface{ Hash() Value }); ok {
 		return hashable.Hash()
 	}
-	return newError(String(fmt.Sprintf("object %s is not hashable", v.Type())))
+	return newError(ctx, String(fmt.Sprintf("object %s is not hashable", v.Type())))
 }

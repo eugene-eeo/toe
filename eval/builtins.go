@@ -171,17 +171,11 @@ func bi_Function_bind(ctx *Context, this Value, args []Value) Value {
 
 func bi_Function_call(ctx *Context, this Value, args []Value) Value {
 	var call_this Value = NIL
-	if len(args) > 1 {
+	if len(args) > 0 {
 		call_this = args[0]
 		args = args[1:]
 	}
-	switch this := this.(type) {
-	case *Function:
-		return this.Call(ctx, call_this, args)
-	case *Builtin:
-		return this.Call(ctx, call_this, args)
-	}
-	return newError(String(fmt.Sprintf("invalid receiver type %s", this.Type())))
+	return ctx.call(NIL, this, call_this, args)
 }
 
 // -----
@@ -195,22 +189,6 @@ func bi_Error_throw(ctx *Context, this Value, args []Value) Value {
 // ------
 // Number
 // ------
-
-func bi_Number_init(ctx *Context, this Value, args []Value) Value {
-	if this.Type() == VT_OBJECT {
-		if len(args) > 0 && args[0] != NIL {
-			num, err := expectArgType(ctx, "s", args[0], VT_NUMBER)
-			if err != nil {
-				return err
-			}
-			obj := this.(*Object)
-			obj.data = num.(Number)
-		}
-		return NIL
-	} else {
-		return newError(String("'Number.init' called on non-object"))
-	}
-}
 
 func bi_Number_equal(ctx *Context, left, right Value) Value  { return Boolean(left.(Number) == right.(Number)) }
 func bi_Number_plus(ctx *Context, left, right Value) Value   { return left.(Number) + right.(Number) }
@@ -233,22 +211,6 @@ func bi_Number_leq(ctx *Context, left, right Value) Value {
 // ------
 // String
 // ------
-
-func bi_String_init(ctx *Context, this Value, args []Value) Value {
-	if this.Type() == VT_OBJECT {
-		if len(args) > 0 && args[0] != NIL {
-			str, err := expectArgType(ctx, "n", args[0], VT_STRING)
-			if err != nil {
-				return err
-			}
-			obj := this.(*Object)
-			obj.data = str.(String)
-		}
-		return NIL
-	} else {
-		return newError(String("'Number.init' called on non-object"))
-	}
-}
 
 func bi_String_equal(ctx *Context, left, right Value) Value { return Boolean(left.(String) == right.(String)) }
 func bi_String_plus(ctx *Context, left, right Value) Value { return left.(String) + right.(String) }
@@ -458,6 +420,24 @@ func bi_Hash_set(ctx *Context, this Value, args []Value) Value {
 	return NIL
 }
 
+func bi_Hash_delete(ctx *Context, this Value, args []Value) Value {
+	hash, err := expectArgType(ctx, "this", this, VT_HASH)
+	if err != nil {
+		return err
+	}
+	if err := expectNArgs(args, 1); err != nil {
+		return err
+	}
+	found, err := hash.(*Hash).table.delete(args[0])
+	if err != nil {
+		return err
+	}
+	if !found {
+		return newError(String("key not in hash"))
+	}
+	return NIL
+}
+
 func bi_Hash_size(ctx *Context, this Value, args []Value) Value {
 	hash, err := expectArgType(ctx, "this", this, VT_HASH)
 	if err != nil {
@@ -543,10 +523,11 @@ func newGlobals() *Globals {
 	g.Error.slots["throw"] = newBuiltin("throw", bi_Error_throw)
 
 	g.Boolean = newObject(g.Object)
+	g.Boolean.slots["init"] = newBuiltin("init", builtin_init(VT_BOOLEAN, FALSE))
 
 	g.Number = newObject(g.Object)
 	g.Number.slots["type"] = String("Number")
-	g.Number.slots["init"] = newBuiltin("init", bi_Number_init)
+	g.Number.slots["init"] = newBuiltin("init", builtin_init(VT_NUMBER, Number(0)))
 	g.Number.slots["=="] = binOp2Builtin("==", bi_Number_equal, VT_NUMBER, VT_NUMBER)
 	g.Number.slots["+"] = binOp2Builtin("+", bi_Number_plus, VT_NUMBER, VT_NUMBER)
 	g.Number.slots["-"] = binOp2Builtin("-", bi_Number_minus, VT_NUMBER, VT_NUMBER)
@@ -559,7 +540,7 @@ func newGlobals() *Globals {
 
 	g.String = newObject(g.Object)
 	g.String.slots["type"] = String("String")
-	g.String.slots["init"] = newBuiltin("init", bi_String_init)
+	g.String.slots["init"] = newBuiltin("init", builtin_init(VT_STRING, String("")))
 	g.String.slots["=="] = binOp2Builtin("==", bi_String_equal, VT_STRING, VT_STRING)
 	g.String.slots["+"] = binOp2Builtin("+", bi_String_plus, VT_STRING, VT_STRING)
 	g.String.slots[">"] = binOp2Builtin(">", bi_String_gt, VT_STRING, VT_STRING)
@@ -585,6 +566,7 @@ func newGlobals() *Globals {
 	g.Hash.slots["size"] = newBuiltin("size", bi_Hash_size)
 	g.Hash.slots["get"] = newBuiltin("get", bi_Hash_get)
 	g.Hash.slots["set"] = newBuiltin("set", bi_Hash_set)
+	g.Hash.slots["delete"] = newBuiltin("delete", bi_Hash_delete)
 	g.Hash.slots["=="] = binOp2Builtin("==", bi_Hash_equal, VT_HASH, VT_HASH)
 
 	return g
@@ -655,4 +637,30 @@ func binOp2Builtin(name string, f binOpFunc, ltype, rtype ValueType) *Builtin {
 		}
 		return f(ctx, left, right)
 	})
+}
+
+// builtin_init generates an init method for immutable builtins, i.e. String,
+// Number, Boolean.
+func builtin_init(typ ValueType, zero Value) builtinFunc {
+	return func(ctx *Context, this Value, args []Value) Value {
+		fmt.Println(this)
+		if this.Type() == VT_OBJECT {
+			obj := this.(*Object)
+			if obj.data != nil {
+				return newError(String("object already initialised"))
+			}
+			obj.data = zero
+			// Check for NIL here: this makes init methods easier to write.
+			if len(args) > 0 && args[0] != NIL {
+				value, err := expectArgType(ctx, "x", args[0], typ)
+				if err != nil {
+					return err
+				}
+				obj.data = value
+			}
+			return NIL
+		} else {
+			return newError(String("init called on non-object"))
+		}
+	}
 }

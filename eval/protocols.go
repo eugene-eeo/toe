@@ -129,6 +129,8 @@ func (ctx *Context) getPrototype(obj Value) Value {
 		return ctx.globals.Boolean
 	case Number:
 		return ctx.globals.Number
+	case String:
+		return ctx.globals.String
 	case *Array:
 		return ctx.globals.Array
 	case *Hash:
